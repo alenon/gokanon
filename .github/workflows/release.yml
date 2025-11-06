@@ -1,0 +1,230 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build binaries
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            output: gokanon-linux-amd64
+          - goos: linux
+            goarch: arm64
+            output: gokanon-linux-arm64
+          - goos: darwin
+            goarch: amd64
+            output: gokanon-darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            output: gokanon-darwin-arm64
+          - goos: windows
+            goarch: amd64
+            output: gokanon-windows-amd64.exe
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version: '1.25.3'
+
+    - name: Get version
+      id: get_version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "VERSION=${{ inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Build binary
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+        CGO_ENABLED: 0
+      run: |
+        VERSION=${{ steps.get_version.outputs.VERSION }}
+        LDFLAGS="-s -w -X main.Version=${VERSION}"
+        go build -trimpath -ldflags "${LDFLAGS}" -o ${{ matrix.output }} .
+
+    - name: Create tarball (Unix)
+      if: matrix.goos != 'windows'
+      run: |
+        tar -czf ${{ matrix.output }}.tar.gz ${{ matrix.output }} LICENSE README.md
+
+    - name: Create zip (Windows)
+      if: matrix.goos == 'windows'
+      run: |
+        zip ${{ matrix.output }}.zip ${{ matrix.output }} LICENSE README.md
+
+    - name: Generate checksums
+      run: |
+        if [ "${{ matrix.goos }}" = "windows" ]; then
+          sha256sum ${{ matrix.output }}.zip > ${{ matrix.output }}.zip.sha256
+        else
+          sha256sum ${{ matrix.output }}.tar.gz > ${{ matrix.output }}.tar.gz.sha256
+        fi
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v5
+      with:
+        name: ${{ matrix.output }}
+        path: |
+          ${{ matrix.output }}*
+        retention-days: 1
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+
+    - name: Get version
+      id: get_version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "VERSION=${{ inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v5
+      with:
+        path: ./artifacts
+
+    - name: Organize artifacts
+      run: |
+        mkdir -p ./release
+        find ./artifacts -type f -exec mv {} ./release/ \;
+        ls -la ./release/
+
+    - name: Generate release notes
+      id: release_notes
+      run: |
+        VERSION=${{ steps.get_version.outputs.VERSION }}
+        cat > release_notes.md << 'EOF'
+        ## Installation
+
+        ### Quick Install (macOS/Linux)
+        ```bash
+        curl -sSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | bash
+        ```
+
+        ### Manual Installation
+
+        #### macOS
+        **Apple Silicon (M1/M2/M3):**
+        ```bash
+        curl -L https://github.com/${{ github.repository }}/releases/download/${VERSION}/gokanon-darwin-arm64.tar.gz | tar xz
+        sudo mv gokanon-darwin-arm64 /usr/local/bin/gokanon
+        ```
+
+        **Intel:**
+        ```bash
+        curl -L https://github.com/${{ github.repository }}/releases/download/${VERSION}/gokanon-darwin-amd64.tar.gz | tar xz
+        sudo mv gokanon-darwin-amd64 /usr/local/bin/gokanon
+        ```
+
+        #### Linux
+        **x86_64:**
+        ```bash
+        curl -L https://github.com/${{ github.repository }}/releases/download/${VERSION}/gokanon-linux-amd64.tar.gz | tar xz
+        sudo mv gokanon-linux-amd64 /usr/local/bin/gokanon
+        ```
+
+        **ARM64:**
+        ```bash
+        curl -L https://github.com/${{ github.repository }}/releases/download/${VERSION}/gokanon-linux-arm64.tar.gz | tar xz
+        sudo mv gokanon-linux-arm64 /usr/local/bin/gokanon
+        ```
+
+        #### Windows
+        Download `gokanon-windows-amd64.exe.zip`, extract, and add to PATH.
+
+        ### Using Go
+        ```bash
+        go install github.com/${{ github.repository }}@${VERSION}
+        ```
+
+        ### Using Homebrew (macOS/Linux)
+        ```bash
+        brew install alenon/tap/gokanon
+        ```
+
+        ## What's Changed
+        See the full changelog below.
+
+        ## Checksums
+        SHA256 checksums are available for all binaries in the release assets.
+        EOF
+        echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
+        cat release_notes.md >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.get_version.outputs.VERSION }}
+        name: Release ${{ steps.get_version.outputs.VERSION }}
+        body_path: release_notes.md
+        draft: false
+        prerelease: false
+        files: |
+          ./release/*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-homebrew:
+    name: Update Homebrew Formula
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+
+    - name: Get version
+      id: get_version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "VERSION=${{ inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Trigger Homebrew tap update
+      run: |
+        VERSION=${{ steps.get_version.outputs.VERSION }}
+        echo "Release ${VERSION} created. Update Homebrew formula at:"
+        echo "https://github.com/${{ github.repository_owner }}/homebrew-tap"
+        echo ""
+        echo "Instructions:"
+        echo "1. Calculate SHA256 for darwin-amd64:"
+        echo "   curl -sL https://github.com/${{ github.repository }}/releases/download/${VERSION}/gokanon-darwin-amd64.tar.gz | shasum -a 256"
+        echo ""
+        echo "2. Calculate SHA256 for darwin-arm64:"
+        echo "   curl -sL https://github.com/${{ github.repository }}/releases/download/${VERSION}/gokanon-darwin-arm64.tar.gz | shasum -a 256"
+        echo ""
+        echo "3. Update the formula in homebrew-tap repository"

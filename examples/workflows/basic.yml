@@ -1,0 +1,25 @@
+# Basic benchmark workflow
+# This workflow runs benchmarks on every push and pull request
+# It compares against the previous run and fails if performance degrades more than 10%
+
+name: Basic Benchmarks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Run benchmarks
+        uses: alenon/gokanon@v1
+        with:
+          packages: './...'
+          threshold-percent: 10
+          export-format: 'html'

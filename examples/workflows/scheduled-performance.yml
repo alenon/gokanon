@@ -1,0 +1,80 @@
+# Scheduled performance testing workflow
+# This workflow runs nightly to track performance trends over time
+# It includes statistical analysis and doesn't fail on regressions
+
+name: Nightly Performance Testing
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # Run at 2 AM UTC daily
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  performance-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Restore historical benchmark data
+        uses: actions/cache@v4
+        with:
+          path: .gokanon
+          key: benchmark-history-${{ github.sha }}
+          restore-keys: |
+            benchmark-history-
+
+      - name: Run comprehensive benchmarks
+        id: benchmark
+        uses: alenon/gokanon@v1
+        with:
+          go-version: '1.21'
+          packages: './...'
+          benchmark-filter: '.'  # Run all benchmarks
+          threshold-percent: 15
+          export-format: 'html,csv,markdown'
+          export-output: 'nightly-performance'
+          stats-last-n: 30  # Analyze last 30 runs
+          fail-on-regression: false  # Don't fail nightly runs
+          upload-artifact: true
+
+      - name: Save historical data
+        uses: actions/cache/save@v4
+        with:
+          path: .gokanon
+          key: benchmark-history-${{ github.sha }}
+
+      - name: Create issue on significant degradation
+        if: steps.benchmark.outputs.passed == 'false' && steps.benchmark.outputs.max-degradation-percent > 25
+        uses: actions/github-script@v8
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '⚠️ Significant performance degradation detected',
+              body: `## Performance Alert
+
+              The nightly performance test has detected a significant degradation.
+
+              ### Metrics
+              - Max degradation: ${{ steps.benchmark.outputs.max-degradation-percent }}%
+              - Degraded benchmarks: ${{ steps.benchmark.outputs.degraded-count }}
+              - Run ID: \`${{ steps.benchmark.outputs.run-id }}\`
+
+              ### Action Required
+              Please review the [detailed report](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) and investigate the cause of this regression.
+
+              ### Workflow Run
+              [View full results](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+              `,
+              labels: ['performance', 'regression']
+            });
+
+      - name: Upload CSV for further analysis
+        uses: actions/upload-artifact@v5
+        with:
+          name: performance-data-${{ github.run_number }}
+          path: |
+            nightly-performance.csv
+          retention-days: 90

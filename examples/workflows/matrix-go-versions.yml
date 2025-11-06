@@ -1,0 +1,73 @@
+# Matrix testing across multiple Go versions
+# This workflow tests benchmark performance across different Go versions
+# Useful for ensuring performance is consistent across supported versions
+
+name: Multi-Version Benchmark Testing
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  benchmark-matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go-version: ['1.20', '1.21', '1.22']
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Restore baseline for Go ${{ matrix.go-version }}
+        uses: actions/cache@v4
+        with:
+          path: .gokanon-${{ matrix.go-version }}
+          key: benchmark-go${{ matrix.go-version }}-${{ github.ref_name }}
+          restore-keys: |
+            benchmark-go${{ matrix.go-version }}-
+
+      - name: Run benchmarks on Go ${{ matrix.go-version }}
+        id: benchmark
+        uses: alenon/gokanon@v1
+        with:
+          go-version: ${{ matrix.go-version }}
+          packages: './...'
+          storage-dir: '.gokanon-${{ matrix.go-version }}'
+          threshold-percent: 10
+          export-format: 'html'
+          export-output: 'benchmark-go${{ matrix.go-version }}'
+          fail-on-regression: false  # Don't fail individual versions
+
+      - name: Save baseline for Go ${{ matrix.go-version }}
+        if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: .gokanon-${{ matrix.go-version }}
+          key: benchmark-go${{ matrix.go-version }}-${{ github.ref_name }}-${{ github.sha }}
+
+      - name: Upload report for Go ${{ matrix.go-version }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: benchmark-report-go${{ matrix.go-version }}
+          path: benchmark-go${{ matrix.go-version }}.html
+
+  summary:
+    needs: benchmark-matrix
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Download all reports
+        uses: actions/download-artifact@v5
+
+      - name: Create summary
+        run: |
+          echo "# 📊 Multi-Version Benchmark Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Benchmarks completed for Go versions: 1.20, 1.21, 1.22" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Check the artifacts for detailed reports for each version." >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,452 @@
+name: 'gokanon - Go Benchmark Testing'
+description: 'Run, compare, and analyze Go benchmarks with automatic regression detection'
+author: 'gokanon'
+branding:
+  icon: 'activity'
+  color: 'blue'
+
+inputs:
+  go-version:
+    description: 'Go version to use for running benchmarks'
+    required: false
+    default: '1.24'
+
+  packages:
+    description: 'Package paths to benchmark (e.g., ./..., ./app, ./pkg/...)'
+    required: false
+    default: './...'
+
+  benchmark-filter:
+    description: 'Benchmark filter pattern (e.g., BenchmarkFoo, . for all)'
+    required: false
+    default: '.'
+
+  storage-dir:
+    description: 'Directory to store benchmark results'
+    required: false
+    default: '.gokanon'
+
+  threshold-percent:
+    description: 'Maximum performance degradation percentage allowed (0-100)'
+    required: false
+    default: '10'
+
+  compare-baseline:
+    description: 'Compare against baseline (requires at least 2 runs)'
+    required: false
+    default: 'true'
+
+  export-format:
+    description: 'Export format for reports (html, csv, markdown, or comma-separated list)'
+    required: false
+    default: 'html'
+
+  export-output:
+    description: 'Output filename for reports (without extension)'
+    required: false
+    default: 'benchmark-report'
+
+  stats-last-n:
+    description: 'Number of recent runs to use for statistical analysis (0 to skip)'
+    required: false
+    default: '0'
+
+  upload-artifact:
+    description: 'Upload generated reports as workflow artifacts'
+    required: false
+    default: 'true'
+
+  fail-on-regression:
+    description: 'Fail the workflow if performance regression exceeds threshold'
+    required: false
+    default: 'true'
+
+  working-directory:
+    description: 'Working directory where to run the benchmarks'
+    required: false
+    default: '.'
+
+  install-gokanon:
+    description: 'Whether to install gokanon (set to false if already installed)'
+    required: false
+    default: 'true'
+
+  gokanon-version:
+    description: 'Version of gokanon to install (latest, or specific version like v1.0.0)'
+    required: false
+    default: 'latest'
+
+  enable-profiling:
+    description: 'Enable CPU and memory profiling (cpu, mem, or cpu,mem)'
+    required: false
+    default: ''
+
+  trend-analysis-runs:
+    description: 'Number of runs to use for trend analysis (0 to skip, requires at least 2 runs)'
+    required: false
+    default: '0'
+
+  baseline-name:
+    description: 'Name of the baseline to compare against (e.g., v1.0, main, stable)'
+    required: false
+    default: ''
+
+  baseline-tag:
+    description: 'Git tag to load baseline from (will checkout .gokanon/baselines from that tag)'
+    required: false
+    default: ''
+
+  save-baseline:
+    description: 'Save the current run as a baseline with the given name (typically on main branch)'
+    required: false
+    default: ''
+
+outputs:
+  run-id:
+    description: 'ID of the benchmark run'
+    value: ${{ steps.run-benchmarks.outputs.run-id }}
+
+  comparison-summary:
+    description: 'Plain text comparison summary'
+    value: ${{ steps.compare.outputs.summary }}
+
+  passed:
+    description: 'Whether the threshold check passed (true/false)'
+    value: ${{ steps.check-threshold.outputs.passed }}
+
+  degraded-count:
+    description: 'Number of benchmarks that degraded'
+    value: ${{ steps.compare.outputs.degraded-count }}
+
+  improved-count:
+    description: 'Number of benchmarks that improved'
+    value: ${{ steps.compare.outputs.improved-count }}
+
+  unchanged-count:
+    description: 'Number of benchmarks that remained unchanged'
+    value: ${{ steps.compare.outputs.unchanged-count }}
+
+  report-path:
+    description: 'Path to the generated report file'
+    value: ${{ steps.export.outputs.report-path }}
+
+  max-degradation-percent:
+    description: 'Maximum degradation percentage found'
+    value: ${{ steps.compare.outputs.max-degradation }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Go
+      uses: actions/setup-go@v6
+      with:
+        go-version: ${{ inputs.go-version }}
+        cache: false
+
+    - name: Install gokanon
+      if: inputs.install-gokanon == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "Installing gokanon..."
+        if [ "${{ inputs.gokanon-version }}" = "latest" ]; then
+          go install github.com/alenon/gokanon@latest
+        else
+          go install github.com/alenon/gokanon@${{ inputs.gokanon-version }}
+        fi
+        echo "gokanon installed successfully"
+        gokanon --help || true
+
+    - name: Create storage directory
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        mkdir -p "${{ inputs.storage-dir }}"
+        echo "Storage directory: ${{ inputs.storage-dir }}"
+
+    - name: Load baseline from git tag
+      if: inputs.baseline-tag != ''
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "Loading baseline from git tag: ${{ inputs.baseline-tag }}"
+
+        # Create a temporary directory to checkout the baseline
+        TEMP_DIR=$(mktemp -d)
+
+        # Checkout the baselines directory from the specified tag
+        git archive --remote=origin ${{ inputs.baseline-tag }} ${{ inputs.storage-dir }}/baselines | tar -x -C "$TEMP_DIR" 2>/dev/null || {
+          echo "Warning: Could not load baseline from tag ${{ inputs.baseline-tag }}"
+          echo "This might be because the tag doesn't exist or doesn't have baselines"
+          rm -rf "$TEMP_DIR"
+          exit 0
+        }
+
+        # Copy the baselines to the storage directory
+        if [ -d "$TEMP_DIR/${{ inputs.storage-dir }}/baselines" ]; then
+          mkdir -p "${{ inputs.storage-dir }}/baselines"
+          cp -r "$TEMP_DIR/${{ inputs.storage-dir }}/baselines/"* "${{ inputs.storage-dir }}/baselines/" 2>/dev/null || true
+          echo "Baseline loaded successfully"
+
+          # List loaded baselines
+          if command -v gokanon &> /dev/null; then
+            gokanon baseline list -storage="${{ inputs.storage-dir }}" || true
+          fi
+        else
+          echo "No baselines found in tag ${{ inputs.baseline-tag }}"
+        fi
+
+        rm -rf "$TEMP_DIR"
+
+    - name: Run benchmarks
+      id: run-benchmarks
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "Running benchmarks..."
+        echo "Packages: ${{ inputs.packages }}"
+        echo "Filter: ${{ inputs.benchmark-filter }}"
+
+        # Build gokanon command with optional profiling
+        GOKANON_CMD="gokanon run -pkg=\"${{ inputs.packages }}\" -bench=\"${{ inputs.benchmark-filter }}\" -storage=\"${{ inputs.storage-dir }}\""
+
+        if [ -n "${{ inputs.enable-profiling }}" ]; then
+          echo "Profiling enabled: ${{ inputs.enable-profiling }}"
+          GOKANON_CMD="${GOKANON_CMD} -profile=\"${{ inputs.enable-profiling }}\""
+        fi
+
+        eval $GOKANON_CMD
+
+        # Get the latest run ID
+        RUN_ID=$(gokanon list -storage="${{ inputs.storage-dir }}" | tail -n 1 | awk '{print $1}')
+        echo "run-id=${RUN_ID}" >> $GITHUB_OUTPUT
+        echo "Latest run ID: ${RUN_ID}"
+
+    - name: Compare with baseline
+      id: compare
+      if: inputs.compare-baseline == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      continue-on-error: true
+      run: |
+        echo "Comparing with baseline..."
+
+        # Determine comparison command
+        if [ -n "${{ inputs.baseline-name }}" ]; then
+          echo "Using named baseline: ${{ inputs.baseline-name }}"
+
+          # Check if baseline exists
+          if ! gokanon baseline show -name="${{ inputs.baseline-name }}" -storage="${{ inputs.storage-dir }}" >/dev/null 2>&1; then
+            echo "Baseline '${{ inputs.baseline-name }}' not found"
+            echo "summary=Baseline not found" >> $GITHUB_OUTPUT
+            echo "degraded-count=0" >> $GITHUB_OUTPUT
+            echo "improved-count=0" >> $GITHUB_OUTPUT
+            echo "unchanged-count=0" >> $GITHUB_OUTPUT
+            echo "max-degradation=0" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Run comparison with baseline
+          COMPARISON=$(gokanon compare --baseline="${{ inputs.baseline-name }}" -storage="${{ inputs.storage-dir }}")
+        else
+          # Check if we have at least 2 runs
+          RUN_COUNT=$(gokanon list -storage="${{ inputs.storage-dir }}" | tail -n +2 | wc -l)
+          if [ "$RUN_COUNT" -lt 2 ]; then
+            echo "Not enough runs for comparison (need at least 2, have $RUN_COUNT)"
+            echo "summary=No baseline available for comparison" >> $GITHUB_OUTPUT
+            echo "degraded-count=0" >> $GITHUB_OUTPUT
+            echo "improved-count=0" >> $GITHUB_OUTPUT
+            echo "unchanged-count=0" >> $GITHUB_OUTPUT
+            echo "max-degradation=0" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Run comparison with latest
+          COMPARISON=$(gokanon compare --latest -storage="${{ inputs.storage-dir }}")
+        fi
+
+        echo "${COMPARISON}"
+
+        # Parse comparison results
+        DEGRADED=$(echo "${COMPARISON}" | grep -c "slower" || echo "0")
+        IMPROVED=$(echo "${COMPARISON}" | grep -c "faster" || echo "0")
+        UNCHANGED=$(echo "${COMPARISON}" | grep -c "~" || echo "0")
+
+        # Extract max degradation (look for percentage increases)
+        MAX_DEGRADATION=$(echo "${COMPARISON}" | grep -oP '\+\K[0-9]+(?=\.[0-9]+%)' | sort -rn | head -1 || echo "0")
+
+        echo "degraded-count=${DEGRADED}" >> $GITHUB_OUTPUT
+        echo "improved-count=${IMPROVED}" >> $GITHUB_OUTPUT
+        echo "unchanged-count=${UNCHANGED}" >> $GITHUB_OUTPUT
+        echo "max-degradation=${MAX_DEGRADATION}" >> $GITHUB_OUTPUT
+
+        # Save summary
+        SUMMARY="Degraded: ${DEGRADED}, Improved: ${IMPROVED}, Unchanged: ${UNCHANGED}"
+        echo "summary=${SUMMARY}" >> $GITHUB_OUTPUT
+        echo "${SUMMARY}"
+
+    - name: Save baseline
+      if: inputs.save-baseline != ''
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "Saving baseline: ${{ inputs.save-baseline }}"
+
+        # Save the latest run as a baseline
+        gokanon baseline save \
+          -name="${{ inputs.save-baseline }}" \
+          -desc="Baseline saved from GitHub Actions on $(date -u +"%Y-%m-%d %H:%M:%S UTC")" \
+          -storage="${{ inputs.storage-dir }}"
+
+        echo "Baseline '${{ inputs.save-baseline }}' saved successfully"
+
+        # Display the saved baseline
+        gokanon baseline show -name="${{ inputs.save-baseline }}" -storage="${{ inputs.storage-dir }}" || true
+
+    - name: Export reports
+      id: export
+      if: inputs.export-format != ''
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      continue-on-error: true
+      run: |
+        echo "Exporting reports..."
+
+        # Check if we have at least 2 runs
+        RUN_COUNT=$(gokanon list -storage="${{ inputs.storage-dir }}" | tail -n +2 | wc -l)
+        if [ "$RUN_COUNT" -lt 2 ]; then
+          echo "Not enough runs for export (need at least 2)"
+          exit 0
+        fi
+
+        # Split formats by comma and export each
+        IFS=',' read -ra FORMATS <<< "${{ inputs.export-format }}"
+        REPORT_PATHS=""
+
+        for FORMAT in "${FORMATS[@]}"; do
+          FORMAT=$(echo "$FORMAT" | xargs) # trim whitespace
+          OUTPUT_FILE="${{ inputs.export-output }}.${FORMAT}"
+
+          echo "Generating ${FORMAT} report..."
+          gokanon export --latest \
+            -format="${FORMAT}" \
+            -output="${OUTPUT_FILE}" \
+            -storage="${{ inputs.storage-dir }}"
+
+          if [ -f "${OUTPUT_FILE}" ]; then
+            echo "Report generated: ${OUTPUT_FILE}"
+            REPORT_PATHS="${REPORT_PATHS}${OUTPUT_FILE},"
+          fi
+        done
+
+        # Remove trailing comma
+        REPORT_PATHS=${REPORT_PATHS%,}
+        echo "report-path=${REPORT_PATHS}" >> $GITHUB_OUTPUT
+
+    - name: Generate statistics
+      id: stats
+      if: inputs.stats-last-n != '0'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      continue-on-error: true
+      run: |
+        echo "Generating statistics for last ${{ inputs.stats-last-n }} runs..."
+
+        RUN_COUNT=$(gokanon list -storage="${{ inputs.storage-dir }}" | tail -n +2 | wc -l)
+        if [ "$RUN_COUNT" -lt "${{ inputs.stats-last-n }}" ]; then
+          echo "Not enough runs for statistics (need ${{ inputs.stats-last-n }}, have $RUN_COUNT)"
+          exit 0
+        fi
+
+        gokanon stats -last=${{ inputs.stats-last-n }} -storage="${{ inputs.storage-dir }}"
+
+    - name: Trend analysis
+      id: trend
+      if: inputs.trend-analysis-runs != '0'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      continue-on-error: true
+      run: |
+        echo "Running trend analysis for last ${{ inputs.trend-analysis-runs }} runs..."
+
+        RUN_COUNT=$(gokanon list -storage="${{ inputs.storage-dir }}" | tail -n +2 | wc -l)
+        if [ "$RUN_COUNT" -lt 2 ]; then
+          echo "Not enough runs for trend analysis (need at least 2, have $RUN_COUNT)"
+          exit 0
+        fi
+
+        RUNS_TO_ANALYZE=${{ inputs.trend-analysis-runs }}
+        if [ "$RUNS_TO_ANALYZE" -gt "$RUN_COUNT" ]; then
+          RUNS_TO_ANALYZE=$RUN_COUNT
+        fi
+
+        echo "Analyzing trends for last $RUNS_TO_ANALYZE runs..."
+        gokanon trend -last=$RUNS_TO_ANALYZE -storage="${{ inputs.storage-dir }}"
+
+    - name: Check threshold
+      id: check-threshold
+      if: inputs.fail-on-regression == 'true' && inputs.compare-baseline == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "Checking performance threshold..."
+
+        # Check if we have at least 2 runs
+        RUN_COUNT=$(gokanon list -storage="${{ inputs.storage-dir }}" | tail -n +2 | wc -l)
+        if [ "$RUN_COUNT" -lt 2 ]; then
+          echo "Not enough runs for threshold check (need at least 2)"
+          echo "passed=true" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        # Run threshold check
+        if gokanon check --latest -threshold=${{ inputs.threshold-percent }} -storage="${{ inputs.storage-dir }}"; then
+          echo "passed=true" >> $GITHUB_OUTPUT
+          echo "✅ Performance check passed! No significant degradation detected."
+        else
+          echo "passed=false" >> $GITHUB_OUTPUT
+          echo "❌ Performance degradation exceeds threshold of ${{ inputs.threshold-percent }}%"
+          exit 1
+        fi
+
+    - name: Upload artifacts
+      if: inputs.upload-artifact == 'true'
+      uses: actions/upload-artifact@v5
+      with:
+        name: benchmark-reports
+        path: |
+          ${{ inputs.working-directory }}/${{ inputs.export-output }}.*
+          ${{ inputs.working-directory }}/${{ inputs.storage-dir }}/profiles/**/*.prof
+        if-no-files-found: ignore
+
+    - name: Summary
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "## 📊 Benchmark Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ "${{ steps.compare.outputs.summary }}" != "" ] && [ "${{ steps.compare.outputs.summary }}" != "No baseline available for comparison" ]; then
+          echo "### Comparison Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔴 Degraded: ${{ steps.compare.outputs.degraded-count }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🟢 Improved: ${{ steps.compare.outputs.improved-count }}" >> $GITHUB_STEP_SUMMARY
+          echo "- ⚪ Unchanged: ${{ steps.compare.outputs.unchanged-count }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 📈 Max degradation: ${{ steps.compare.outputs.max-degradation }}%" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.check-threshold.outputs.passed }}" = "true" ]; then
+            echo "✅ Performance check **PASSED** (threshold: ${{ inputs.threshold-percent }}%)" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.check-threshold.outputs.passed }}" = "false" ]; then
+            echo "❌ Performance check **FAILED** (threshold: ${{ inputs.threshold-percent }}%)" >> $GITHUB_STEP_SUMMARY
+          fi
+        else
+          echo "ℹ️ No baseline available for comparison" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Run ID: \`${{ steps.run-benchmarks.outputs.run-id }}\`" >> $GITHUB_STEP_SUMMARY
+
+        if [ "${{ steps.export.outputs.report-path }}" != "" ]; then
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📄 Reports generated: \`${{ steps.export.outputs.report-path }}\`" >> $GITHUB_STEP_SUMMARY
+        fi

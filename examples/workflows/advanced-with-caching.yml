@@ -1,0 +1,96 @@
+# Advanced benchmark workflow with caching and PR comments
+# This workflow:
+# - Compares PR benchmarks against the main branch baseline
+# - Caches benchmark results for historical comparison
+# - Posts results as PR comments
+# - Uploads HTML reports as artifacts
+
+name: Advanced Benchmarks with Caching
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write  # Required for PR comments
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # Needed for proper git comparison
+
+      - name: Restore baseline benchmarks
+        uses: actions/cache@v4
+        with:
+          path: .gokanon
+          key: benchmark-baseline-${{ github.base_ref || github.ref_name }}
+          restore-keys: |
+            benchmark-baseline-main
+            benchmark-baseline-
+
+      - name: Run benchmarks
+        id: benchmark
+        uses: alenon/gokanon@v1
+        with:
+          go-version: '1.21'
+          packages: './...'
+          threshold-percent: 10
+          export-format: 'html,markdown'
+          fail-on-regression: true
+          upload-artifact: true
+
+      - name: Save baseline (main branch only)
+        if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: .gokanon
+          key: benchmark-baseline-${{ github.ref_name }}-${{ github.sha }}
+
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request' && steps.benchmark.outputs.comparison-summary != 'No baseline available for comparison'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const passed = '${{ steps.benchmark.outputs.passed }}' === 'true';
+            const statusEmoji = passed ? '✅' : '❌';
+            const statusText = passed ? 'PASSED' : 'FAILED';
+
+            const summary = `## ${statusEmoji} Benchmark Results - ${statusText}
+
+            ### Summary
+            - 🔴 Degraded: ${{ steps.benchmark.outputs.degraded-count }}
+            - 🟢 Improved: ${{ steps.benchmark.outputs.improved-count }}
+            - ⚪ Unchanged: ${{ steps.benchmark.outputs.unchanged-count }}
+            - 📈 Max degradation: ${{ steps.benchmark.outputs.max-degradation-percent }}%
+            - 🎯 Threshold: ${{ inputs.threshold-percent || 10 }}%
+
+            ### Details
+            Run ID: \`${{ steps.benchmark.outputs.run-id }}\`
+
+            📄 [View detailed HTML report](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+            <details>
+            <summary>How to interpret these results</summary>
+
+            - **Degraded**: Benchmarks that are slower than the baseline
+            - **Improved**: Benchmarks that are faster than the baseline
+            - **Unchanged**: Benchmarks with no significant change
+            - **Max degradation**: The worst performance regression found
+            - **Threshold**: Maximum acceptable degradation before the workflow fails
+
+            </details>
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: summary
+            });
