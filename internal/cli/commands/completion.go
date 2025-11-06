@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/alenon/gokanon/embedded"
 	"github.com/alenon/gokanon/internal/ui"
 )
 
@@ -44,11 +45,11 @@ func Completion() error {
 	scriptPath := ""
 	switch shell {
 	case "bash":
-		scriptPath = "scripts/completions/gokanon.bash"
+		scriptPath = "gokanon.bash"
 	case "zsh":
-		scriptPath = "scripts/completions/gokanon.zsh"
+		scriptPath = "gokanon.zsh"
 	case "fish":
-		scriptPath = "scripts/completions/gokanon.fish"
+		scriptPath = "gokanon.fish"
 	default:
 		return ui.NewError(
 			fmt.Sprintf("Unsupported shell: %s", shell),
@@ -58,8 +59,8 @@ func Completion() error {
 		)
 	}
 
-	// Read the completion script from the file
-	content, err := os.ReadFile(scriptPath)
+	// Read the completion script from embedded files
+	content, err := embedded.CompletionScripts.ReadFile(scriptPath)
 	if err != nil {
 		return ui.NewError(
 			"Failed to read completion script",
