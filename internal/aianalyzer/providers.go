@@ -271,7 +271,7 @@ func NewAnthropicProvider(config Config) (*AnthropicProvider, error) {
 // Analyze sends a prompt to Anthropic and returns the response
 func (p *AnthropicProvider) Analyze(prompt string) (string, error) {
 	requestBody := map[string]interface{}{
-		"model": p.model,
+		"model":      p.model,
 		"max_tokens": 2000,
 		"messages": []map[string]string{
 			{

@@ -246,11 +246,11 @@ func TestToHTML(t *testing.T) {
 		"90.00",
 		"200.00",
 		"220.00",
-		"✅", // improved indicator (emoji)
-		"❌", // degraded indicator (emoji)
-		"chart.js", // Verify Chart.js is included (lowercase in CDN URL)
+		"✅",                // improved indicator (emoji)
+		"❌",                // degraded indicator (emoji)
+		"chart.js",         // Verify Chart.js is included (lowercase in CDN URL)
 		"performanceChart", // Verify performance chart canvas
-		"deltaChart", // Verify delta chart canvas
+		"deltaChart",       // Verify delta chart canvas
 		"<table>",
 		"</table>",
 		"</body>",

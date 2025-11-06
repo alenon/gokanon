@@ -5,8 +5,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/chzyer/readline"
 	"github.com/alenon/gokanon/internal/ui"
+	"github.com/chzyer/readline"
 )
 
 // Session represents an interactive gokanon session

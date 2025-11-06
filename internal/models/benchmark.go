@@ -85,10 +85,10 @@ type Suggestion struct {
 
 // Baseline represents a saved baseline benchmark run
 type Baseline struct {
-	Name        string            `json:"name"`         // Baseline identifier (e.g., "v1.0", "main", "stable")
-	RunID       string            `json:"run_id"`       // ID of the benchmark run used as baseline
-	CreatedAt   time.Time         `json:"created_at"`   // When the baseline was created
-	Description string            `json:"description"`  // Optional description
-	Run         *BenchmarkRun     `json:"run,omitempty"` // Full benchmark run data
+	Name        string            `json:"name"`           // Baseline identifier (e.g., "v1.0", "main", "stable")
+	RunID       string            `json:"run_id"`         // ID of the benchmark run used as baseline
+	CreatedAt   time.Time         `json:"created_at"`     // When the baseline was created
+	Description string            `json:"description"`    // Optional description
+	Run         *BenchmarkRun     `json:"run,omitempty"`  // Full benchmark run data
 	Tags        map[string]string `json:"tags,omitempty"` // Additional metadata tags
 }

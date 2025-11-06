@@ -370,4 +370,3 @@ func TestRunWithSpecificBenchmark(t *testing.T) {
 		t.Error("Expected to find String benchmark in results")
 	}
 }
-

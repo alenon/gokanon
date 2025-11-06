@@ -111,7 +111,7 @@ func extractBulletSuggestions(text string) []models.Suggestion {
 
 		// Check for bullet points or numbered lists
 		if strings.HasPrefix(line, "-") || strings.HasPrefix(line, "*") ||
-		   regexp.MustCompile(`^\d+\.`).MatchString(line) {
+			regexp.MustCompile(`^\d+\.`).MatchString(line) {
 			// Save previous suggestion if exists
 			if currentSuggestion != nil {
 				suggestions = append(suggestions, *currentSuggestion)
@@ -145,11 +145,11 @@ func extractBulletSuggestions(text string) []models.Suggestion {
 func inferType(text string) string {
 	lower := strings.ToLower(text)
 	if strings.Contains(lower, "cpu") || strings.Contains(lower, "time") ||
-	   strings.Contains(lower, "slow") || strings.Contains(lower, "performance") {
+		strings.Contains(lower, "slow") || strings.Contains(lower, "performance") {
 		return "cpu"
 	}
 	if strings.Contains(lower, "memory") || strings.Contains(lower, "allocation") ||
-	   strings.Contains(lower, "leak") || strings.Contains(lower, "gc") {
+		strings.Contains(lower, "leak") || strings.Contains(lower, "gc") {
 		return "memory"
 	}
 	if strings.Contains(lower, "algorithm") || strings.Contains(lower, "complexity") {
@@ -162,7 +162,7 @@ func inferType(text string) string {
 func inferSeverity(text string) string {
 	lower := strings.ToLower(text)
 	if strings.Contains(lower, "critical") || strings.Contains(lower, "severe") ||
-	   strings.Contains(lower, "major") {
+		strings.Contains(lower, "major") {
 		return "high"
 	}
 	if strings.Contains(lower, "moderate") || strings.Contains(lower, "significant") {

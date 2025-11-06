@@ -395,9 +395,9 @@ func TestBuiltInCommands_Coverage(t *testing.T) {
 	defer session.Close()
 
 	builtInCommands := []string{
-		"exit", "quit",  // Exit commands
-		"help", "?",     // Help commands
-		"clear", "cls",  // Clear commands
+		"exit", "quit", // Exit commands
+		"help", "?", // Help commands
+		"clear", "cls", // Clear commands
 	}
 
 	for _, cmd := range builtInCommands {

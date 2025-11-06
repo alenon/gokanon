@@ -57,8 +57,8 @@ func TestParseTextSuggestions(t *testing.T) {
 			expectedCount: 1,
 		},
 		{
-			name: "plain JSON array",
-			text: `[{"type":"memory","severity":"medium","function":"MemFunc","issue":"Memory leak","suggestion":"Fix leak","impact":"20%"}]`,
+			name:          "plain JSON array",
+			text:          `[{"type":"memory","severity":"medium","function":"MemFunc","issue":"Memory leak","suggestion":"Fix leak","impact":"20%"}]`,
 			expectedCount: 1,
 		},
 		{
