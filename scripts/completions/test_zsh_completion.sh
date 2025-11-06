@@ -67,12 +67,12 @@ else
     log_error "Completion script does not contain _gokanon function"
 fi
 
-# Test 3: Check if completion script contains the function call
-log_info "Test 3: Check if completion script calls _gokanon"
-if grep -q '_gokanon "$@"' "$COMPLETION_FILE"; then
-    log_success "Completion script calls _gokanon function"
+# Test 3: Check if completion script registers the function with compdef
+log_info "Test 3: Check if completion script registers _gokanon with compdef"
+if grep -q 'compdef _gokanon gokanon' "$COMPLETION_FILE"; then
+    log_success "Completion script registers function with compdef"
 else
-    log_error "Completion script does not call _gokanon function"
+    log_error "Completion script does not register function with compdef"
 fi
 
 # Test 4: Check if completion script contains compdef directive
@@ -128,6 +128,15 @@ if zsh -n "$COMPLETION_FILE" 2>&1; then
     log_success "No zsh syntax errors detected"
 else
     log_error "Zsh syntax errors found in completion script"
+fi
+
+# Test 9: Verify sourcing doesn't produce _arguments errors
+log_info "Test 9: Verify sourcing doesn't produce _arguments errors"
+ZSH_SOURCE_ERRORS=$(zsh -c 'autoload -U compinit; compinit -u 2>/dev/null; source <(gokanon completion zsh)' 2>&1)
+if echo "$ZSH_SOURCE_ERRORS" | grep -q "_arguments:comparguments"; then
+    log_error "Sourcing produces _arguments error: $ZSH_SOURCE_ERRORS"
+else
+    log_success "Sourcing completes without _arguments errors"
 fi
 
 # Cleanup

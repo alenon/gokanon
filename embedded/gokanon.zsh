@@ -143,5 +143,5 @@ _gokanon() {
     fi
 }
 
-# Call the completion function
-_gokanon "$@"
+# Register the completion function (needed when sourced with 'source <(...)')
+compdef _gokanon gokanon
