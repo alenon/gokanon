@@ -142,3 +142,6 @@ _gokanon() {
         _describe 'export format' export_formats
     fi
 }
+
+# Call the completion function
+_gokanon "$@"
