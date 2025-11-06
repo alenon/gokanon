@@ -142,5 +142,3 @@ _gokanon() {
         _describe 'export format' export_formats
     fi
 }
-
-_gokanon "$@"
