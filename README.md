@@ -963,9 +963,84 @@ gokanon trend -benchmark=BenchmarkCriticalPath -last=20
 - Use `gokanon stats` to understand typical variation
 - Consider running benchmarks multiple times and using median values
 
+## Development & Testing
+
+### Running Tests
+
+GoKanon has comprehensive test coverage with beautiful, easy-to-understand test reports.
+
+**Quick test run:**
+```bash
+go test ./...
+```
+
+**Generate beautiful test report:**
+```bash
+./scripts/test-report.sh
+```
+
+**Save report to file:**
+```bash
+./scripts/test-report.sh test-report.txt
+```
+
+The test report provides:
+- 🎨 **Color-coded output** with visual indicators
+- 📊 **Progress bars** for coverage percentages
+- 🎯 **A-F grading** for overall coverage
+- 📦 **Package breakdown** with detailed metrics
+- 🔍 **Command analysis** for each GoKanon command
+- 💡 **Actionable recommendations** for improvement
+
+**Test coverage:**
+- Overall: ~69% and growing
+- Commands: 62.7% (34.5% → 62.7% improvement)
+- Core packages: 80%+ coverage
+
+See `TEST_COVERAGE_REPORT.md` for detailed coverage analysis.
+
+### CI/CD Testing
+
+Tests run automatically on all pushes and pull requests via GitHub Actions.
+
+The workflow:
+- Runs all tests
+- Generates coverage reports
+- Posts results as PR comments
+- Uploads test artifacts
+- Enforces quality gates
+
+See `.github/workflows/test-report.yml` for configuration.
+
+### End-to-End Verification
+
+Run the complete verification suite:
+
+```bash
+./test-verify-all-commands.sh
+```
+
+This script tests all 14 commands end-to-end with real benchmarks.
+
+### Building
+
+```bash
+# Build binary
+go build -o gokanon .
+
+# Run locally
+./gokanon --help
+```
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit issues or pull requests.
+
+Before submitting a PR:
+1. Run tests: `./scripts/test-report.sh`
+2. Ensure coverage doesn't decrease
+3. Add tests for new features
+4. Update documentation
 
 ## License
 

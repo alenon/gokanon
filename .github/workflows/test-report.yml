@@ -1,0 +1,105 @@
+name: Test Report
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+jobs:
+  test-report:
+    name: Generate Test Report
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Make test report script executable
+        run: chmod +x scripts/test-report.sh
+
+      - name: Generate Test Report
+        id: test-report
+        run: |
+          # Run the test report script and save output
+          ./scripts/test-report.sh test-report.txt || echo "exit_code=$?" >> $GITHUB_OUTPUT
+
+          # Also save as artifact
+          cat test-report.txt
+
+      - name: Upload Test Report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-report
+          path: test-report.txt
+
+      - name: Upload Coverage Profile
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-profile
+          path: coverage.out
+          if-no-files-found: ignore
+
+      - name: Comment PR with Test Report
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            try {
+              const report = fs.readFileSync('test-report.txt', 'utf8');
+
+              // Strip ANSI color codes for GitHub comment
+              const cleanReport = report.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
+
+              // Post comment on PR
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: '## 🧪 Test Report\n\n```\n' + cleanReport + '\n```'
+              });
+            } catch (err) {
+              console.log('Could not read test report:', err);
+            }
+
+      - name: Generate Coverage Badge
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        run: |
+          # Extract coverage percentage
+          COVERAGE=$(go tool cover -func=coverage.out 2>/dev/null | grep "total:" | awk '{print $3}' | sed 's/%//' || echo "0")
+          echo "Coverage: ${COVERAGE}%"
+
+          # Determine badge color
+          if (( $(echo "$COVERAGE >= 80" | bc -l) )); then
+            COLOR="brightgreen"
+          elif (( $(echo "$COVERAGE >= 60" | bc -l) )); then
+            COLOR="yellow"
+          else
+            COLOR="red"
+          fi
+
+          echo "COVERAGE=${COVERAGE}" >> $GITHUB_ENV
+          echo "BADGE_COLOR=${COLOR}" >> $GITHUB_ENV
+
+      - name: Fail if tests failed
+        if: steps.test-report.outputs.exit_code != '0'
+        run: exit 1
