@@ -19,7 +19,9 @@ GOINSTALL=$(GOCMD) install
 GOCLEAN=$(GOCMD) clean
 
 # Build flags
-LDFLAGS=-ldflags "-X main.Version=$(VERSION) -s -w"
+GIT_COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
+BUILD_DATE=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
+LDFLAGS=-ldflags "-X github.com/alenon/gokanon/internal/cli.Version=$(VERSION) -X github.com/alenon/gokanon/internal/cli.GitCommit=$(GIT_COMMIT) -X github.com/alenon/gokanon/internal/cli.BuildDate=$(BUILD_DATE) -s -w"
 BUILD_FLAGS=-trimpath
 
 # Test flags

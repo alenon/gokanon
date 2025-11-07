@@ -1,4 +1,6 @@
-bin
+bin/
+.gokanon/
+coverage/
 
 # Build artifacts
 gokanon

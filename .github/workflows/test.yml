@@ -38,53 +38,12 @@ jobs:
     - name: Display coverage
       run: go tool cover -func=coverage.out
 
-    - name: Make test report script executable
-      run: chmod +x scripts/test-report.sh
-
-    - name: Generate Beautiful Test Report
-      id: test-report
-      run: |
-        # Generate the test report and save to file
-        ./scripts/test-report.sh test-report.txt || echo "exit_code=$?" >> $GITHUB_OUTPUT
-
-        # Also display in logs
-        cat test-report.txt
-
-    - name: Upload Test Report
-      if: always()
-      uses: actions/upload-artifact@v5
-      with:
-        name: test-report
-        path: test-report.txt
-
     - name: Upload coverage report
+      if: always()
       uses: actions/upload-artifact@v5
       with:
         name: coverage-report
         path: coverage.out
-
-    - name: Comment PR with Test Report
-      if: github.event_name == 'pull_request'
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const fs = require('fs');
-          try {
-            const report = fs.readFileSync('test-report.txt', 'utf8');
-
-            // Strip ANSI color codes for GitHub comment
-            const cleanReport = report.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
-
-            // Post comment on PR
-            await github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '## 🧪 Test Report\n\n```\n' + cleanReport + '\n```'
-            });
-          } catch (err) {
-            console.log('Could not post test report:', err.message);
-          }
 
     - name: Generate Coverage Badge Data
       if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
