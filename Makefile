@@ -2,7 +2,7 @@
 
 # Variables
 BINARY_NAME=gokanon
-VERSION?=dev
+VERSION?=$(shell [ -f VERSION ] && cat VERSION || echo "dev")
 BUILD_DIR=./bin
 CMD_DIR=.
 COVERAGE_DIR=./coverage
@@ -237,6 +237,67 @@ info:
 	@echo "  make coverage       - Generate coverage report"
 	@echo "  make install        - Install to GOPATH/bin"
 	@echo "  make help           - Show all targets"
+
+## version: Display current version
+version:
+	@echo "$(VERSION)"
+
+## version-bump-patch: Bump patch version (0.0.X)
+version-bump-patch:
+	@if [ ! -f VERSION ]; then echo "0.0.1" > VERSION; else \
+		current=$$(cat VERSION); \
+		major=$$(echo $$current | cut -d. -f1); \
+		minor=$$(echo $$current | cut -d. -f2); \
+		patch=$$(echo $$current | cut -d. -f3); \
+		new_patch=$$((patch + 1)); \
+		echo "$$major.$$minor.$$new_patch" > VERSION; \
+		echo "Version bumped: $$current -> $$major.$$minor.$$new_patch"; \
+	fi
+
+## version-bump-minor: Bump minor version (0.X.0)
+version-bump-minor:
+	@if [ ! -f VERSION ]; then echo "0.1.0" > VERSION; else \
+		current=$$(cat VERSION); \
+		major=$$(echo $$current | cut -d. -f1); \
+		minor=$$(echo $$current | cut -d. -f2); \
+		new_minor=$$((minor + 1)); \
+		echo "$$major.$$new_minor.0" > VERSION; \
+		echo "Version bumped: $$current -> $$major.$$new_minor.0"; \
+	fi
+
+## version-bump-major: Bump major version (X.0.0)
+version-bump-major:
+	@if [ ! -f VERSION ]; then echo "1.0.0" > VERSION; else \
+		current=$$(cat VERSION); \
+		major=$$(echo $$current | cut -d. -f1); \
+		new_major=$$((major + 1)); \
+		echo "$$new_major.0.0" > VERSION; \
+		echo "Version bumped: $$current -> $$new_major.0.0"; \
+	fi
+
+## version-set: Set version manually (usage: make version-set VERSION=1.2.3)
+version-set:
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Error: VERSION not specified. Usage: make version-set VERSION=1.2.3"; \
+		exit 1; \
+	fi
+	@echo "$(VERSION)" > VERSION
+	@echo "Version set to: $(VERSION)"
+
+## tag-release: Create and push git tag for current version
+tag-release:
+	@version=$$(cat VERSION 2>/dev/null || echo "dev"); \
+	if [ "$$version" = "dev" ]; then \
+		echo "Error: Cannot tag 'dev' version. Set version first."; \
+		exit 1; \
+	fi; \
+	if git rev-parse "v$$version" >/dev/null 2>&1; then \
+		echo "Error: Tag v$$version already exists"; \
+		exit 1; \
+	fi; \
+	echo "Creating tag v$$version..."; \
+	git tag -a "v$$version" -m "Release v$$version"; \
+	echo "Tag created. Push with: git push origin v$$version"
 
 ## deps: Install development dependencies
 deps:

@@ -64,7 +64,9 @@ jobs:
         CGO_ENABLED: 0
       run: |
         VERSION=${{ steps.get_version.outputs.VERSION }}
-        LDFLAGS="-s -w -X main.Version=${VERSION}"
+        GIT_COMMIT=$(git rev-parse --short HEAD)
+        BUILD_DATE=$(date -u '+%Y-%m-%d_%H:%M:%S')
+        LDFLAGS="-s -w -X github.com/alenon/gokanon/internal/cli.Version=${VERSION} -X github.com/alenon/gokanon/internal/cli.GitCommit=${GIT_COMMIT} -X github.com/alenon/gokanon/internal/cli.BuildDate=${BUILD_DATE}"
         go build -trimpath -ldflags "${LDFLAGS}" -o ${{ matrix.output }} .
 
     - name: Create tarball (Unix)
@@ -125,7 +127,40 @@ jobs:
       id: release_notes
       run: |
         VERSION=${{ steps.get_version.outputs.VERSION }}
-        cat > release_notes.md << 'EOF'
+
+        # Get the previous tag to generate differences
+        PREV_TAG=$(git tag --sort=-version:refname | grep -v "${VERSION}" | head -n 1 || echo "")
+
+        # Start building release notes
+        cat > release_notes.md << EOF
+        ## What's Changed
+        EOF
+
+        # Generate changelog from commits
+        if [ -n "$PREV_TAG" ]; then
+          echo "" >> release_notes.md
+          echo "### Changes since ${PREV_TAG}" >> release_notes.md
+          echo "" >> release_notes.md
+
+          # Get commits between tags with better formatting
+          git log ${PREV_TAG}..HEAD --pretty=format:"* %s (%h)" --no-merges >> release_notes.md || true
+          echo "" >> release_notes.md
+          echo "" >> release_notes.md
+
+          # Add comparison link
+          echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${VERSION}" >> release_notes.md
+        else
+          echo "" >> release_notes.md
+          echo "Initial release of gokanon - a modern Go benchmarking tool." >> release_notes.md
+          echo "" >> release_notes.md
+          git log --pretty=format:"* %s (%h)" --no-merges >> release_notes.md || true
+        fi
+
+        echo "" >> release_notes.md
+        echo "" >> release_notes.md
+
+        # Add installation instructions
+        cat >> release_notes.md << 'INSTALL_EOF'
         ## Installation
 
         ### Quick Install (macOS/Linux)
@@ -174,15 +209,12 @@ jobs:
         brew install alenon/tap/gokanon
         ```
 
-        ## What's Changed
-        See the full changelog below.
-
         ## Checksums
         SHA256 checksums are available for all binaries in the release assets.
-        EOF
-        echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
-        cat release_notes.md >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+        INSTALL_EOF
+
+        # Replace VERSION placeholder in installation commands
+        sed -i "s/\${VERSION}/${VERSION}/g" release_notes.md
 
     - name: Create Release
       uses: softprops/action-gh-release@v1
