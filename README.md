@@ -285,3 +285,23 @@ See LICENSE file for details.
 ## Contributing
 
 Contributions welcome! Please submit issues or pull requests at [github.com/alenon/gokanon](https://github.com/alenon/gokanon).
+
+### For Maintainers: Releasing a New Version
+
+See [RELEASE.md](RELEASE.md) for the complete release process. Quick summary:
+
+```bash
+# Bump version
+make version-bump-minor  # or patch/major
+
+# Commit version
+git add VERSION
+git commit -m "Bump version to $(cat VERSION)"
+git push origin main
+
+# Create and push tag
+make tag-release
+git push origin v$(cat VERSION)
+```
+
+The release workflow will automatically build binaries, generate release notes with changes, and create a GitHub release.
