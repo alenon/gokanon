@@ -29,6 +29,7 @@ Commands:
   doctor       Run diagnostics to check your setup
   interactive  Start interactive mode with auto-completion
   completion   Install shell completion scripts
+  version      Show version information
   help         Show this help message
 
 Examples:
@@ -100,6 +101,15 @@ func Execute() error {
 		return commands.Interactive()
 	case "completion":
 		return commands.Completion()
+	case "version", "-v", "--version":
+		fmt.Printf("gokanon version %s\n", Version)
+		if GitCommit != "none" {
+			fmt.Printf("  commit: %s\n", GitCommit)
+		}
+		if BuildDate != "unknown" {
+			fmt.Printf("  built: %s\n", BuildDate)
+		}
+		return nil
 	case "help", "-h", "--help":
 		fmt.Print(usageText)
 		return nil
