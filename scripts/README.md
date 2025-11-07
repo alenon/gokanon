@@ -112,14 +112,15 @@ Generated: 2025-11-07 08:46:54
 
 **Integration with CI/CD:**
 
-See `.github/workflows/test-report.yml` for GitHub Actions integration.
+See `.github/workflows/test.yml` for GitHub Actions integration.
 
 The workflow automatically:
-- Runs tests on push and PRs
+- Runs all tests with race detection
 - Generates beautiful test reports
 - Posts reports as PR comments
 - Uploads reports as artifacts
-- Fails if tests fail
+- Creates coverage badges
+- Enforces quality gates
 
 **Requirements:**
 

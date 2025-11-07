@@ -1004,13 +1004,14 @@ See `TEST_COVERAGE_REPORT.md` for detailed coverage analysis.
 Tests run automatically on all pushes and pull requests via GitHub Actions.
 
 The workflow:
-- Runs all tests
-- Generates coverage reports
-- Posts results as PR comments
+- Runs all tests with race detection
+- Generates beautiful test reports
+- Posts reports as PR comments
 - Uploads test artifacts
+- Creates coverage badges
 - Enforces quality gates
 
-See `.github/workflows/test-report.yml` for configuration.
+See `.github/workflows/test.yml` for configuration.
 
 ### End-to-End Verification
 
