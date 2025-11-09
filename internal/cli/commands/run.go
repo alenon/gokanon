@@ -21,6 +21,7 @@ func Run() error {
 	packagePath := runFlags.String("pkg", "", "Package path (default: current directory)")
 	storageDir := runFlags.String("storage", ".gokanon", "Storage directory for results")
 	profileFlag := runFlags.String("profile", "", "Enable profiling: cpu, mem, or cpu,mem")
+	verbose := runFlags.Bool("verbose", false, "Show detailed benchmark output")
 	runFlags.Parse(os.Args[2:])
 
 	ui.PrintHeader("Running Benchmarks")
@@ -65,16 +66,42 @@ func Run() error {
 	}
 
 	// Run benchmarks
-	spinner := ui.NewSpinner("Executing benchmarks")
-	spinner.Start()
+	var spinner *ui.Spinner
+	if !*verbose {
+		spinner = ui.NewSpinner("Executing benchmarks")
+		spinner.Start()
+	}
 
 	r := runner.NewRunner(*packagePath, *benchFilter)
+
+	// Set up progress callback for non-verbose mode
+	if !*verbose {
+		progressCallback := func(result models.BenchmarkResult) {
+			// Format the message with full benchmark details
+			msg := fmt.Sprintf("Completed: Benchmark%s | %s iters | %s | %s | %s allocs",
+				result.Name,
+				formatIterations(result.Iterations),
+				formatNsPerOp(result.NsPerOp),
+				formatBytes(result.BytesPerOp),
+				formatCount(result.AllocsPerOp),
+			)
+			spinner.UpdateMessage(msg)
+		}
+		r = r.WithProgress(progressCallback)
+	} else {
+		// In verbose mode, show raw output
+		r = r.WithVerbose(os.Stdout)
+	}
+
 	if profileOpts != nil {
 		r = r.WithProfiling(profileOpts)
 	}
 
 	run, err := r.Run()
-	spinner.Stop()
+
+	if spinner != nil {
+		spinner.Stop()
+	}
 
 	if err != nil {
 		return ui.ErrBenchmarkFailed(err)
@@ -258,14 +285,65 @@ func displayProfileSummary(summary *models.ProfileSummary) {
 
 // formatBytes formats bytes in human-readable format
 func formatBytes(bytes int64) string {
+	if bytes == 0 {
+		return "0 B/op"
+	}
 	const unit = 1024
 	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
+		return fmt.Sprintf("%d B/op", bytes)
 	}
 	div, exp := int64(unit), 0
 	for n := bytes / unit; n >= unit; n /= unit {
 		div *= unit
 		exp++
 	}
-	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+	return fmt.Sprintf("%.1f %cB/op", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// formatIterations formats iteration count in human-readable format
+func formatIterations(iters int64) string {
+	if iters == 0 {
+		return "0"
+	}
+	if iters < 1000 {
+		return fmt.Sprintf("%d", iters)
+	}
+	if iters < 1000000 {
+		return fmt.Sprintf("%.1fK", float64(iters)/1000)
+	}
+	if iters < 1000000000 {
+		return fmt.Sprintf("%.1fM", float64(iters)/1000000)
+	}
+	return fmt.Sprintf("%.1fB", float64(iters)/1000000000)
+}
+
+// formatNsPerOp formats nanoseconds per operation in human-readable format
+func formatNsPerOp(ns float64) string {
+	if ns == 0 {
+		return "0 ns/op"
+	}
+	if ns < 1000 {
+		return fmt.Sprintf("%.2f ns/op", ns)
+	}
+	if ns < 1000000 {
+		return fmt.Sprintf("%.2f µs/op", ns/1000)
+	}
+	if ns < 1000000000 {
+		return fmt.Sprintf("%.2f ms/op", ns/1000000)
+	}
+	return fmt.Sprintf("%.2f s/op", ns/1000000000)
+}
+
+// formatCount formats allocation count
+func formatCount(count int64) string {
+	if count == 0 {
+		return "0"
+	}
+	if count < 1000 {
+		return fmt.Sprintf("%d", count)
+	}
+	if count < 1000000 {
+		return fmt.Sprintf("%.1fK", float64(count)/1000)
+	}
+	return fmt.Sprintf("%.1fM", float64(count)/1000000)
 }
