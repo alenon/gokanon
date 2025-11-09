@@ -157,6 +157,9 @@ gokanon run -pkg=./...
 
 # With profiling
 gokanon run --profile=cpu,mem
+
+# Control CPU parallelism and benchmark duration
+gokanon run -cpu=1,2,4 -benchtime=1s
 ```
 
 ### 🔥 Profiling & Analysis
