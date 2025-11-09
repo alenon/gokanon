@@ -288,6 +288,8 @@ gokanon check --latest -threshold=10
     packages: './...'
     threshold-percent: 10
     enable-profiling: 'cpu,mem'
+    cpu: '1,2,4'
+    benchtime: '1s'
     export-format: 'html'
 ```
 
