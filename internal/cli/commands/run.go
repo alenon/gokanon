@@ -21,6 +21,7 @@ func Run() error {
 	packagePath := runFlags.String("pkg", "", "Package path (default: current directory)")
 	storageDir := runFlags.String("storage", ".gokanon", "Storage directory for results")
 	profileFlag := runFlags.String("profile", "", "Enable profiling: cpu, mem, or cpu,mem")
+	verbose := runFlags.Bool("verbose", false, "Show detailed benchmark output")
 	runFlags.Parse(os.Args[2:])
 
 	ui.PrintHeader("Running Benchmarks")
@@ -65,21 +66,34 @@ func Run() error {
 	}
 
 	// Run benchmarks
-	spinner := ui.NewSpinner("Executing benchmarks")
-	spinner.Start()
-
-	// Create progress callback to update spinner with current test name
-	progressCallback := func(testName string) {
-		spinner.UpdateMessage(fmt.Sprintf("Running: Benchmark%s", testName))
+	var spinner *ui.Spinner
+	if !*verbose {
+		spinner = ui.NewSpinner("Executing benchmarks")
+		spinner.Start()
 	}
 
-	r := runner.NewRunner(*packagePath, *benchFilter).WithProgress(progressCallback)
+	r := runner.NewRunner(*packagePath, *benchFilter)
+
+	// Set up progress callback for non-verbose mode
+	if !*verbose {
+		progressCallback := func(testName string) {
+			spinner.UpdateMessage(fmt.Sprintf("Running: Benchmark%s", testName))
+		}
+		r = r.WithProgress(progressCallback)
+	} else {
+		// In verbose mode, show raw output
+		r = r.WithVerbose(os.Stdout)
+	}
+
 	if profileOpts != nil {
 		r = r.WithProfiling(profileOpts)
 	}
 
 	run, err := r.Run()
-	spinner.Stop()
+
+	if spinner != nil {
+		spinner.Stop()
+	}
 
 	if err != nil {
 		return ui.ErrBenchmarkFailed(err)

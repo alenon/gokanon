@@ -35,6 +35,7 @@ type Runner struct {
 	benchFilter      string
 	profileOptions   *ProfileOptions
 	progressCallback ProgressCallback
+	verboseWriter    io.Writer
 }
 
 // NewRunner creates a new benchmark runner
@@ -54,6 +55,12 @@ func (r *Runner) WithProfiling(opts *ProfileOptions) *Runner {
 // WithProgress configures the runner to report progress via callback
 func (r *Runner) WithProgress(callback ProgressCallback) *Runner {
 	r.progressCallback = callback
+	return r
+}
+
+// WithVerbose configures the runner to output verbose benchmark details
+func (r *Runner) WithVerbose(writer io.Writer) *Runner {
+	r.verboseWriter = writer
 	return r
 }
 
@@ -154,6 +161,11 @@ func (r *Runner) Run() (*models.BenchmarkRun, error) {
 // parseOutputRealtime parses the benchmark output in real-time from a reader
 func (r *Runner) parseOutputRealtime(reader io.Reader) ([]models.BenchmarkResult, error) {
 	var results []models.BenchmarkResult
+
+	// If verbose mode is enabled, tee the output to the verbose writer
+	if r.verboseWriter != nil {
+		reader = io.TeeReader(reader, r.verboseWriter)
+	}
 
 	// Regex to match benchmark lines
 	// Example: BenchmarkFoo-8   1000000   1234 ns/op   512 B/op   10 allocs/op
