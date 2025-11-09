@@ -36,6 +36,8 @@ type Runner struct {
 	profileOptions   *ProfileOptions
 	progressCallback ProgressCallback
 	verboseWriter    io.Writer
+	cpu              string
+	benchtime        string
 }
 
 // NewRunner creates a new benchmark runner
@@ -64,6 +66,18 @@ func (r *Runner) WithVerbose(writer io.Writer) *Runner {
 	return r
 }
 
+// WithCPU configures the runner to use specific CPU values
+func (r *Runner) WithCPU(cpu string) *Runner {
+	r.cpu = cpu
+	return r
+}
+
+// WithBenchtime configures the runner to use a specific benchtime
+func (r *Runner) WithBenchtime(benchtime string) *Runner {
+	r.benchtime = benchtime
+	return r
+}
+
 // Run executes the benchmarks and returns parsed results
 func (r *Runner) Run() (*models.BenchmarkRun, error) {
 	startTime := time.Now()
@@ -86,6 +100,16 @@ func (r *Runner) Run() (*models.BenchmarkRun, error) {
 
 	// Build the benchmark command
 	args := []string{"test", "-bench", r.benchFilter, "-benchmem"}
+
+	// Add CPU flag if specified
+	if r.cpu != "" {
+		args = append(args, "-cpu", r.cpu)
+	}
+
+	// Add benchtime flag if specified
+	if r.benchtime != "" {
+		args = append(args, "-benchtime", r.benchtime)
+	}
 
 	// Add profiling flags if enabled
 	var cpuProfilePath, memProfilePath string
