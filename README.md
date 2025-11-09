@@ -1,83 +1,149 @@
-# gokanon
+<div align="center">
 
-A powerful CLI tool for running and comparing Go benchmark tests with profiling, analysis, and CI/CD integration.
+# 🚀 gokanon
 
-## Features
+### A powerful CLI tool for running and comparing Go benchmark tests
 
-- **Run & Save Benchmarks** - Execute and automatically save benchmark results
-- **CPU/Memory Profiling** - Generate profiles with flame graph visualization
-- **Compare Results** - Compare benchmark runs with detailed performance analysis
-- **Statistical Analysis** - Analyze multiple runs with mean, median, and stability metrics
-- **Trend Analysis** - Track performance trends over time with regression detection
-- **Interactive Dashboard** - Web-based visualization with charts and insights
-- **Export Reports** - Generate reports in HTML, CSV, or Markdown
-- **CI/CD Integration** - Automated threshold checking for pipelines
-- **AI Analysis** - Get intelligent optimization suggestions (Ollama, OpenAI, Claude, Gemini)
+*Profiling • Analysis • CI/CD Integration*
 
-## Installation
+[![License](https://img.shields.io/github/license/alenon/gokanon)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/alenon/gokanon)](https://github.com/alenon/gokanon/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/alenon/gokanon)](https://goreportcard.com/report/github.com/alenon/gokanon)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/alenon/gokanon)](go.mod)
 
-### Quick Install
+[Installation](#-installation) •
+[Quick Start](#-quick-start) •
+[Features](#-features) •
+[Documentation](#-usage) •
+[CI/CD](#-cicd-integration)
 
-**macOS & Linux:**
+</div>
+
+---
+
+## ✨ Features
+
+<table>
+<tr>
+<td width="50%">
+
+### 🎯 Core Capabilities
+- ⚡ **Run & Save Benchmarks** - Execute and automatically save results
+- 🔥 **CPU/Memory Profiling** - Flame graph visualization
+- 📊 **Compare Results** - Detailed performance analysis
+- 📈 **Statistical Analysis** - Mean, median, stability metrics
+
+</td>
+<td width="50%">
+
+### 🚀 Advanced Features
+- 📉 **Trend Analysis** - Regression detection over time
+- 🎨 **Interactive Dashboard** - Web-based visualization
+- 📝 **Export Reports** - HTML, CSV, Markdown formats
+- 🤖 **AI Analysis** - Intelligent optimization suggestions
+
+</td>
+</tr>
+<tr>
+<td colspan="2">
+
+### 🔧 Integration & Automation
+✅ **CI/CD Ready** - GitHub Actions support with automated threshold checking
+✅ **Multiple AI Providers** - Ollama, OpenAI, Claude, Gemini, Groq
+✅ **Shell Completion** - Bash, Zsh, Fish support
+✅ **Baseline Management** - Track and compare against reference points
+
+</td>
+</tr>
+</table>
+
+## 📦 Installation
+
+### ⚡ Quick Install
+
+<table>
+<tr>
+<td>
+
+**🍎 macOS & Linux**
 ```bash
 curl -sSL https://raw.githubusercontent.com/alenon/gokanon/main/install.sh | bash
 ```
 
-**macOS with Homebrew:**
+</td>
+<td>
+
+**🍺 Homebrew**
 ```bash
 brew install alenon/tap/gokanon
 ```
 
-### Pre-built Binaries
+</td>
+</tr>
+</table>
 
-Download from [GitHub Releases](https://github.com/alenon/gokanon/releases/latest)
+### 📥 Pre-built Binaries
 
-**macOS (Apple Silicon):**
+> 📌 Download from [GitHub Releases](https://github.com/alenon/gokanon/releases/latest)
+
+<details>
+<summary><b>🍎 macOS (Apple Silicon)</b></summary>
+
 ```bash
 curl -L https://github.com/alenon/gokanon/releases/latest/download/gokanon-darwin-arm64.tar.gz | tar xz
 sudo mv gokanon-darwin-arm64 /usr/local/bin/gokanon
 ```
+</details>
 
-**Linux (x86_64):**
+<details>
+<summary><b>🐧 Linux (x86_64)</b></summary>
+
 ```bash
 curl -L https://github.com/alenon/gokanon/releases/latest/download/gokanon-linux-amd64.tar.gz | tar xz
 sudo mv gokanon-linux-amd64 /usr/local/bin/gokanon
 ```
+</details>
 
-### Install with Go
+### 🔨 Install with Go
 
 ```bash
 go install github.com/alenon/gokanon@latest
 ```
 
-## Quick Start
+---
+
+## 🚀 Quick Start
 
 ```bash
-# Run benchmarks
+# 1️⃣ Run benchmarks
 gokanon run -pkg=./...
 
-# View interactive dashboard
+# 2️⃣ View interactive dashboard
 gokanon serve
 
-# Run with profiling
+# 3️⃣ Run with profiling
 gokanon run --profile=cpu,mem
 
-# View flame graphs
+# 4️⃣ View flame graphs
 gokanon flamegraph --latest
 
-# Compare results
+# 5️⃣ Compare results
 gokanon compare --latest
 
-# Export to HTML
+# 6️⃣ Export to HTML
 gokanon export --latest -format=html
 
-# Check performance threshold (CI/CD)
+# 7️⃣ Check performance threshold (CI/CD)
 gokanon check --latest -threshold=10
 ```
 
-## Usage
+> 💡 **Tip:** Run `gokanon help` to see all available commands and options
 
-### Running Benchmarks
+---
+
+## 📖 Usage
+
+### ⚡ Running Benchmarks
 
 ```bash
 # All benchmarks in current package
@@ -93,7 +159,7 @@ gokanon run -pkg=./...
 gokanon run --profile=cpu,mem
 ```
 
-### Profiling & Analysis
+### 🔥 Profiling & Analysis
 
 Generate CPU and memory profiles to identify bottlenecks:
 
@@ -105,39 +171,54 @@ gokanon run --profile=cpu,mem
 gokanon flamegraph --latest
 ```
 
-The profiler automatically:
-- Identifies hot functions and memory allocation patterns
-- Detects potential memory leaks
-- Provides optimization suggestions with impact analysis
+**The profiler automatically:**
+- 🎯 Identifies hot functions and memory allocation patterns
+- 🔍 Detects potential memory leaks
+- 💡 Provides optimization suggestions with impact analysis
 
-### AI-Powered Analysis
+### 🤖 AI-Powered Analysis
 
 Enable AI analysis for intelligent insights:
 
+<details>
+<summary><b>🟢 Using Ollama (Free, Local)</b></summary>
+
 ```bash
-# Using Ollama (free, local)
 export GOKANON_AI_ENABLED=true
 export GOKANON_AI_PROVIDER=ollama
+```
+</details>
 
-# Using OpenAI
+<details>
+<summary><b>🔵 Using OpenAI</b></summary>
+
+```bash
 export GOKANON_AI_ENABLED=true
 export GOKANON_AI_PROVIDER=openai
 export GOKANON_AI_API_KEY=sk-your-key
 export GOKANON_AI_MODEL=gpt-4o
+```
+</details>
 
-# Using Anthropic Claude
+<details>
+<summary><b>🟣 Using Anthropic Claude</b></summary>
+
+```bash
 export GOKANON_AI_ENABLED=true
 export GOKANON_AI_PROVIDER=anthropic
 export GOKANON_AI_API_KEY=sk-ant-your-key
+```
+</details>
 
+```bash
 # Run with AI analysis
 gokanon run --profile=cpu,mem
 gokanon compare --latest
 ```
 
-Supported providers: Ollama, OpenAI, Anthropic, Gemini, Groq, OpenAI-compatible APIs
+> 🔌 **Supported Providers:** Ollama, OpenAI, Anthropic, Gemini, Groq, OpenAI-compatible APIs
 
-### Interactive Dashboard
+### 🎨 Interactive Dashboard
 
 ```bash
 # Start dashboard
@@ -148,12 +229,12 @@ gokanon serve -port=9000
 ```
 
 Access at `http://localhost:8080` for:
-- Real-time performance trends
-- Historical data with charts
-- Side-by-side comparisons
-- Dark mode support
+- 📈 Real-time performance trends
+- 📊 Historical data with charts
+- ⚖️ Side-by-side comparisons
+- 🌙 Dark mode support
 
-### Comparing Results
+### 📊 Comparing Results
 
 ```bash
 # Last two runs
@@ -166,7 +247,7 @@ gokanon compare run-123 run-456
 gokanon compare --baseline=v1.0
 ```
 
-### Statistical & Trend Analysis
+### 📈 Statistical & Trend Analysis
 
 ```bash
 # Analyze last 5 runs
@@ -176,7 +257,7 @@ gokanon stats -last=5
 gokanon trend -last=10
 ```
 
-### Exporting Reports
+### 📝 Exporting Reports
 
 ```bash
 # HTML report
@@ -189,14 +270,14 @@ gokanon export --latest -format=csv -output=results.csv
 gokanon export --latest -format=markdown -output=comparison.md
 ```
 
-### CI/CD Integration
+### 🔄 CI/CD Integration
 
 ```bash
 # Fail if degradation > 10%
 gokanon check --latest -threshold=10
 ```
 
-**GitHub Action:**
+**GitHub Action Example:**
 ```yaml
 - name: Run benchmarks
   uses: alenon/gokanon@v1
@@ -207,9 +288,9 @@ gokanon check --latest -threshold=10
     export-format: 'html'
 ```
 
-See `action.yml` for complete GitHub Action configuration.
+> 📋 See `action.yml` for complete GitHub Action configuration
 
-### Managing Results
+### 🗂️ Managing Results
 
 ```bash
 # List all results
@@ -224,28 +305,44 @@ gokanon baseline list
 gokanon baseline show -name=v1.0
 ```
 
-## Commands
+## 🔧 Commands Reference
 
+<table>
+<tr>
+<td width="50%">
+
+**Core Commands**
 ```bash
-gokanon run          # Run benchmarks and save results
-gokanon list         # List saved benchmark results
-gokanon compare      # Compare benchmark results
-gokanon export       # Export comparison to HTML/CSV/Markdown
-gokanon stats        # Statistical analysis of multiple runs
-gokanon trend        # Performance trend analysis
-gokanon check        # Check thresholds (CI/CD)
-gokanon flamegraph   # View CPU/memory flame graphs
-gokanon serve        # Start interactive dashboard
-gokanon delete       # Delete benchmark results
-gokanon baseline     # Manage baselines (save, list, show, delete)
+gokanon run         # Run & save benchmarks
+gokanon list        # List saved results
+gokanon compare     # Compare results
+gokanon export      # Export to HTML/CSV/MD
+gokanon stats       # Statistical analysis
+gokanon trend       # Trend analysis
+gokanon check       # Threshold checking
+gokanon flamegraph  # View flame graphs
+```
+
+</td>
+<td width="50%">
+
+**Utility Commands**
+```bash
+gokanon serve        # Interactive dashboard
+gokanon delete       # Delete results
+gokanon baseline     # Manage baselines
 gokanon doctor       # Run diagnostics
-gokanon interactive  # Interactive mode with auto-completion
-gokanon completion   # Install shell completion
-gokanon version      # Show version information
+gokanon interactive  # Interactive mode
+gokanon completion   # Shell completion
+gokanon version      # Version info
 gokanon help         # Show help
 ```
 
-## Storage
+</td>
+</tr>
+</table>
+
+## 💾 Storage
 
 Results are stored in `.gokanon` directory by default. Use `-storage` flag to customize:
 
@@ -254,34 +351,58 @@ gokanon run -storage=./benchmark-results
 gokanon list -storage=./benchmark-results
 ```
 
-## Best Practices
+---
 
-1. **Consistent Environment** - Run benchmarks on consistent hardware and system load
-2. **Multiple Runs** - Run benchmarks multiple times for reliable results
-3. **Baseline** - Maintain a baseline for comparing optimizations
-4. **CI Integration** - Catch regressions early with automated checks
-5. **Appropriate Thresholds** - Set thresholds based on application requirements
+## 💡 Best Practices
 
-## Development
+| Practice | Description |
+|----------|-------------|
+| 🖥️ **Consistent Environment** | Run benchmarks on consistent hardware and system load |
+| 🔄 **Multiple Runs** | Run benchmarks multiple times for reliable results |
+| 📏 **Baseline** | Maintain a baseline for comparing optimizations |
+| 🔗 **CI Integration** | Catch regressions early with automated checks |
+| 🎯 **Appropriate Thresholds** | Set thresholds based on application requirements |
+
+---
+
+## 🛠️ Development
 
 ```bash
-# Build
+# Build the project
 make build
 
 # Run tests
 make test
 
-# Generate coverage
+# Generate coverage report
 make coverage
 
 # Build for all platforms
 make build-all
 ```
 
-## License
+---
 
-See LICENSE file for details.
+## 📄 License
 
-## Contributing
+This project is licensed under the terms specified in the [LICENSE](LICENSE) file.
 
-Contributions welcome! Please submit issues or pull requests at [github.com/alenon/gokanon](https://github.com/alenon/gokanon).
+## 🤝 Contributing
+
+Contributions are welcome! We appreciate your help in making gokanon better.
+
+- 🐛 **Found a bug?** [Open an issue](https://github.com/alenon/gokanon/issues)
+- 💡 **Have an idea?** [Start a discussion](https://github.com/alenon/gokanon/discussions)
+- 🔧 **Want to contribute?** [Submit a pull request](https://github.com/alenon/gokanon/pulls)
+
+---
+
+<div align="center">
+
+**Made with ❤️ for the Go community**
+
+[![GitHub](https://img.shields.io/badge/GitHub-alenon%2Fgokanon-blue?logo=github)](https://github.com/alenon/gokanon)
+[![Issues](https://img.shields.io/github/issues/alenon/gokanon)](https://github.com/alenon/gokanon/issues)
+[![Stars](https://img.shields.io/github/stars/alenon/gokanon)](https://github.com/alenon/gokanon/stargazers)
+
+</div>
