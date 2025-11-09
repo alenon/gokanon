@@ -19,8 +19,8 @@ import (
 	"github.com/alenon/gokanon/internal/storage"
 )
 
-// ProgressCallback is called when a benchmark test starts execution
-type ProgressCallback func(testName string)
+// ProgressCallback is called when a benchmark test completes with its results
+type ProgressCallback func(result models.BenchmarkResult)
 
 // ProfileOptions configures profiling behavior
 type ProfileOptions struct {
@@ -182,12 +182,6 @@ func (r *Runner) parseOutputRealtime(reader io.Reader) ([]models.BenchmarkResult
 
 		if matches != nil {
 			name := matches[1]
-
-			// Call progress callback if set
-			if r.progressCallback != nil {
-				r.progressCallback(name)
-			}
-
 			iterations, _ := strconv.ParseInt(matches[2], 10, 64)
 			nsPerOp, _ := strconv.ParseFloat(matches[3], 64)
 
@@ -213,6 +207,11 @@ func (r *Runner) parseOutputRealtime(reader io.Reader) ([]models.BenchmarkResult
 			}
 
 			results = append(results, result)
+
+			// Call progress callback with full result after parsing
+			if r.progressCallback != nil {
+				r.progressCallback(result)
+			}
 		}
 	}
 

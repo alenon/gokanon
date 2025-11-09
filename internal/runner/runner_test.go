@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/alenon/gokanon/internal/models"
 	"github.com/alenon/gokanon/internal/storage"
 )
 
@@ -379,10 +380,10 @@ func TestWithProgress(t *testing.T) {
 	}
 
 	callCount := 0
-	var capturedNames []string
-	callback := func(testName string) {
+	var capturedResults []models.BenchmarkResult
+	callback := func(result models.BenchmarkResult) {
 		callCount++
-		capturedNames = append(capturedNames, testName)
+		capturedResults = append(capturedResults, result)
 	}
 
 	result := r.WithProgress(callback)
@@ -396,12 +397,19 @@ func TestWithProgress(t *testing.T) {
 	}
 
 	// Test that callback is invoked
-	r.progressCallback("TestBenchmark-8")
+	testResult := models.BenchmarkResult{
+		Name:        "TestBenchmark-8",
+		Iterations:  1000,
+		NsPerOp:     100.5,
+		BytesPerOp:  64,
+		AllocsPerOp: 2,
+	}
+	r.progressCallback(testResult)
 	if callCount != 1 {
 		t.Errorf("Expected callback to be called once, got %d", callCount)
 	}
-	if len(capturedNames) != 1 || capturedNames[0] != "TestBenchmark-8" {
-		t.Errorf("Expected captured name 'TestBenchmark-8', got %v", capturedNames)
+	if len(capturedResults) != 1 || capturedResults[0].Name != "TestBenchmark-8" {
+		t.Errorf("Expected captured result with name 'TestBenchmark-8', got %v", capturedResults)
 	}
 }
 
@@ -432,12 +440,12 @@ BenchmarkStringConcat-8     500000    2345 ns/op   1024 B/op  20 allocs/op
 PASS`
 
 	callCount := 0
-	var capturedNames []string
+	var capturedResults []models.BenchmarkResult
 
 	r := &Runner{}
-	r.WithProgress(func(testName string) {
+	r.WithProgress(func(result models.BenchmarkResult) {
 		callCount++
-		capturedNames = append(capturedNames, testName)
+		capturedResults = append(capturedResults, result)
 	})
 
 	results, err := r.parseOutput(output)
@@ -454,18 +462,40 @@ PASS`
 		t.Errorf("Expected progress callback to be called 2 times, got %d", callCount)
 	}
 
-	expectedNames := []string{"StringBuilder-8", "StringConcat-8"}
-	if len(capturedNames) != len(expectedNames) {
-		t.Errorf("Expected %d captured names, got %d", len(expectedNames), len(capturedNames))
+	expectedResults := []struct {
+		name        string
+		iterations  int64
+		nsPerOp     float64
+		bytesPerOp  int64
+		allocsPerOp int64
+	}{
+		{"StringBuilder-8", 1000000, 1234, 512, 10},
+		{"StringConcat-8", 500000, 2345, 1024, 20},
 	}
 
-	for i, expected := range expectedNames {
-		if i >= len(capturedNames) {
-			t.Errorf("Missing captured name at index %d", i)
+	if len(capturedResults) != len(expectedResults) {
+		t.Errorf("Expected %d captured results, got %d", len(expectedResults), len(capturedResults))
+	}
+
+	for i, expected := range expectedResults {
+		if i >= len(capturedResults) {
+			t.Errorf("Missing captured result at index %d", i)
 			continue
 		}
-		if capturedNames[i] != expected {
-			t.Errorf("Expected captured name[%d] = %s, got %s", i, expected, capturedNames[i])
+		if capturedResults[i].Name != expected.name {
+			t.Errorf("Expected result[%d].Name = %s, got %s", i, expected.name, capturedResults[i].Name)
+		}
+		if capturedResults[i].Iterations != expected.iterations {
+			t.Errorf("Expected result[%d].Iterations = %d, got %d", i, expected.iterations, capturedResults[i].Iterations)
+		}
+		if capturedResults[i].NsPerOp != expected.nsPerOp {
+			t.Errorf("Expected result[%d].NsPerOp = %f, got %f", i, expected.nsPerOp, capturedResults[i].NsPerOp)
+		}
+		if capturedResults[i].BytesPerOp != expected.bytesPerOp {
+			t.Errorf("Expected result[%d].BytesPerOp = %d, got %d", i, expected.bytesPerOp, capturedResults[i].BytesPerOp)
+		}
+		if capturedResults[i].AllocsPerOp != expected.allocsPerOp {
+			t.Errorf("Expected result[%d].AllocsPerOp = %d, got %d", i, expected.allocsPerOp, capturedResults[i].AllocsPerOp)
 		}
 	}
 }
@@ -536,12 +566,12 @@ PASS`
 
 func TestRunWithProgressCallback(t *testing.T) {
 	callCount := 0
-	var capturedNames []string
+	var capturedResults []models.BenchmarkResult
 
 	r := NewRunner("../../examples", "StringBuilder")
-	r.WithProgress(func(testName string) {
+	r.WithProgress(func(result models.BenchmarkResult) {
 		callCount++
-		capturedNames = append(capturedNames, testName)
+		capturedResults = append(capturedResults, result)
 	})
 
 	run, err := r.Run()
@@ -557,22 +587,29 @@ func TestRunWithProgressCallback(t *testing.T) {
 		t.Error("Expected progress callback to be called at least once")
 	}
 
-	if len(capturedNames) == 0 {
-		t.Error("Expected at least one benchmark name to be captured")
+	if len(capturedResults) == 0 {
+		t.Error("Expected at least one benchmark result to be captured")
 	}
 
-	// Verify captured names match results
-	if len(capturedNames) != len(run.Results) {
-		t.Errorf("Expected %d captured names to match %d results", len(capturedNames), len(run.Results))
+	// Verify captured results match final results
+	if len(capturedResults) != len(run.Results) {
+		t.Errorf("Expected %d captured results to match %d results", len(capturedResults), len(run.Results))
 	}
 
 	for i, result := range run.Results {
-		if i >= len(capturedNames) {
-			t.Errorf("Missing captured name for result %d", i)
+		if i >= len(capturedResults) {
+			t.Errorf("Missing captured result for result %d", i)
 			continue
 		}
-		if capturedNames[i] != result.Name {
-			t.Errorf("Captured name[%d] = %s doesn't match result name %s", i, capturedNames[i], result.Name)
+		if capturedResults[i].Name != result.Name {
+			t.Errorf("Captured result[%d].Name = %s doesn't match result name %s", i, capturedResults[i].Name, result.Name)
+		}
+		if capturedResults[i].Iterations != result.Iterations {
+			t.Errorf("Captured result[%d].Iterations = %d doesn't match result iterations %d", i, capturedResults[i].Iterations, result.Iterations)
+		}
+		// Verify other fields are populated
+		if capturedResults[i].NsPerOp == 0 {
+			t.Errorf("Expected result[%d].NsPerOp to be non-zero", i)
 		}
 	}
 }
@@ -615,7 +652,7 @@ func TestProgressAndVerboseNotBothSet(t *testing.T) {
 	callCount := 0
 
 	r := NewRunner("../../examples", "StringBuilder")
-	r.WithProgress(func(testName string) {
+	r.WithProgress(func(result models.BenchmarkResult) {
 		callCount++
 	})
 	r.WithVerbose(&buf)
