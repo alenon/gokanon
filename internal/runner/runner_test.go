@@ -370,3 +370,271 @@ func TestRunWithSpecificBenchmark(t *testing.T) {
 		t.Error("Expected to find String benchmark in results")
 	}
 }
+
+func TestWithProgress(t *testing.T) {
+	r := NewRunner("./test", ".")
+
+	if r.progressCallback != nil {
+		t.Error("Expected progressCallback to be nil initially")
+	}
+
+	callCount := 0
+	var capturedNames []string
+	callback := func(testName string) {
+		callCount++
+		capturedNames = append(capturedNames, testName)
+	}
+
+	result := r.WithProgress(callback)
+
+	if result != r {
+		t.Error("Expected WithProgress to return the same runner instance")
+	}
+
+	if r.progressCallback == nil {
+		t.Error("Expected progressCallback to be set")
+	}
+
+	// Test that callback is invoked
+	r.progressCallback("TestBenchmark-8")
+	if callCount != 1 {
+		t.Errorf("Expected callback to be called once, got %d", callCount)
+	}
+	if len(capturedNames) != 1 || capturedNames[0] != "TestBenchmark-8" {
+		t.Errorf("Expected captured name 'TestBenchmark-8', got %v", capturedNames)
+	}
+}
+
+func TestWithVerbose(t *testing.T) {
+	r := NewRunner("./test", ".")
+
+	if r.verboseWriter != nil {
+		t.Error("Expected verboseWriter to be nil initially")
+	}
+
+	var buf strings.Builder
+	result := r.WithVerbose(&buf)
+
+	if result != r {
+		t.Error("Expected WithVerbose to return the same runner instance")
+	}
+
+	if r.verboseWriter == nil {
+		t.Error("Expected verboseWriter to be set")
+	}
+}
+
+func TestProgressCallbackDuringParsing(t *testing.T) {
+	output := `goos: linux
+goarch: amd64
+BenchmarkStringBuilder-8    1000000   1234 ns/op   512 B/op   10 allocs/op
+BenchmarkStringConcat-8     500000    2345 ns/op   1024 B/op  20 allocs/op
+PASS`
+
+	callCount := 0
+	var capturedNames []string
+
+	r := &Runner{}
+	r.WithProgress(func(testName string) {
+		callCount++
+		capturedNames = append(capturedNames, testName)
+	})
+
+	results, err := r.parseOutput(output)
+
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if len(results) != 2 {
+		t.Fatalf("Expected 2 results, got %d", len(results))
+	}
+
+	if callCount != 2 {
+		t.Errorf("Expected progress callback to be called 2 times, got %d", callCount)
+	}
+
+	expectedNames := []string{"StringBuilder-8", "StringConcat-8"}
+	if len(capturedNames) != len(expectedNames) {
+		t.Errorf("Expected %d captured names, got %d", len(expectedNames), len(capturedNames))
+	}
+
+	for i, expected := range expectedNames {
+		if i >= len(capturedNames) {
+			t.Errorf("Missing captured name at index %d", i)
+			continue
+		}
+		if capturedNames[i] != expected {
+			t.Errorf("Expected captured name[%d] = %s, got %s", i, expected, capturedNames[i])
+		}
+	}
+}
+
+func TestVerboseOutputDuringParsing(t *testing.T) {
+	output := `goos: linux
+goarch: amd64
+BenchmarkStringBuilder-8    1000000   1234 ns/op   512 B/op   10 allocs/op
+PASS
+ok      github.com/test/bench   1.234s`
+
+	var buf strings.Builder
+
+	r := &Runner{}
+	r.WithVerbose(&buf)
+
+	results, err := r.parseOutput(output)
+
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 result, got %d", len(results))
+	}
+
+	// Check that verbose output was written
+	verboseOutput := buf.String()
+	if verboseOutput == "" {
+		t.Error("Expected verbose output to be written, got empty string")
+	}
+
+	// Verify the output contains expected content
+	expectedContents := []string{
+		"goos: linux",
+		"goarch: amd64",
+		"BenchmarkStringBuilder-8",
+		"1000000",
+		"1234 ns/op",
+		"PASS",
+	}
+
+	for _, expected := range expectedContents {
+		if !strings.Contains(verboseOutput, expected) {
+			t.Errorf("Expected verbose output to contain '%s', got: %s", expected, verboseOutput)
+		}
+	}
+}
+
+func TestProgressCallbackNotCalledWhenNotSet(t *testing.T) {
+	output := `BenchmarkStringBuilder-8    1000000   1234 ns/op   512 B/op   10 allocs/op
+PASS`
+
+	r := &Runner{} // No progress callback set
+
+	results, err := r.parseOutput(output)
+
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 result, got %d", len(results))
+	}
+
+	// Test should complete without panic
+}
+
+func TestRunWithProgressCallback(t *testing.T) {
+	callCount := 0
+	var capturedNames []string
+
+	r := NewRunner("../../examples", "StringBuilder")
+	r.WithProgress(func(testName string) {
+		callCount++
+		capturedNames = append(capturedNames, testName)
+	})
+
+	run, err := r.Run()
+	if err != nil {
+		t.Fatalf("Run with progress callback failed: %v", err)
+	}
+
+	if run == nil {
+		t.Fatal("Expected non-nil run")
+	}
+
+	if callCount == 0 {
+		t.Error("Expected progress callback to be called at least once")
+	}
+
+	if len(capturedNames) == 0 {
+		t.Error("Expected at least one benchmark name to be captured")
+	}
+
+	// Verify captured names match results
+	if len(capturedNames) != len(run.Results) {
+		t.Errorf("Expected %d captured names to match %d results", len(capturedNames), len(run.Results))
+	}
+
+	for i, result := range run.Results {
+		if i >= len(capturedNames) {
+			t.Errorf("Missing captured name for result %d", i)
+			continue
+		}
+		if capturedNames[i] != result.Name {
+			t.Errorf("Captured name[%d] = %s doesn't match result name %s", i, capturedNames[i], result.Name)
+		}
+	}
+}
+
+func TestRunWithVerboseOutput(t *testing.T) {
+	var buf strings.Builder
+
+	r := NewRunner("../../examples", "StringBuilder")
+	r.WithVerbose(&buf)
+
+	run, err := r.Run()
+	if err != nil {
+		t.Fatalf("Run with verbose output failed: %v", err)
+	}
+
+	if run == nil {
+		t.Fatal("Expected non-nil run")
+	}
+
+	verboseOutput := buf.String()
+	if verboseOutput == "" {
+		t.Error("Expected verbose output to be captured")
+	}
+
+	// Verify output contains benchmark information
+	if !strings.Contains(verboseOutput, "Benchmark") {
+		t.Error("Expected verbose output to contain 'Benchmark'")
+	}
+
+	if !strings.Contains(verboseOutput, "ns/op") {
+		t.Error("Expected verbose output to contain 'ns/op'")
+	}
+}
+
+func TestProgressAndVerboseNotBothSet(t *testing.T) {
+	// This tests that both progress and verbose can be set independently
+	// though in practice they wouldn't be used together
+
+	var buf strings.Builder
+	callCount := 0
+
+	r := NewRunner("../../examples", "StringBuilder")
+	r.WithProgress(func(testName string) {
+		callCount++
+	})
+	r.WithVerbose(&buf)
+
+	run, err := r.Run()
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	if run == nil {
+		t.Fatal("Expected non-nil run")
+	}
+
+	// Both should work
+	if callCount == 0 {
+		t.Error("Expected progress callback to be called")
+	}
+
+	if buf.String() == "" {
+		t.Error("Expected verbose output to be written")
+	}
+}
