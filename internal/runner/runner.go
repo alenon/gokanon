@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,6 +19,9 @@ import (
 	"github.com/alenon/gokanon/internal/storage"
 )
 
+// ProgressCallback is called when a benchmark test starts execution
+type ProgressCallback func(testName string)
+
 // ProfileOptions configures profiling behavior
 type ProfileOptions struct {
 	EnableCPU    bool
@@ -27,9 +31,10 @@ type ProfileOptions struct {
 
 // Runner handles benchmark execution
 type Runner struct {
-	packagePath    string
-	benchFilter    string
-	profileOptions *ProfileOptions
+	packagePath      string
+	benchFilter      string
+	profileOptions   *ProfileOptions
+	progressCallback ProgressCallback
 }
 
 // NewRunner creates a new benchmark runner
@@ -43,6 +48,12 @@ func NewRunner(packagePath, benchFilter string) *Runner {
 // WithProfiling configures the runner to enable profiling
 func (r *Runner) WithProfiling(opts *ProfileOptions) *Runner {
 	r.profileOptions = opts
+	return r
+}
+
+// WithProgress configures the runner to report progress via callback
+func (r *Runner) WithProgress(callback ProgressCallback) *Runner {
+	r.progressCallback = callback
 	return r
 }
 
@@ -90,18 +101,31 @@ func (r *Runner) Run() (*models.BenchmarkRun, error) {
 
 	// Execute benchmark
 	cmd := exec.Command("go", args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
+
+	// Capture stderr to a buffer
+	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("benchmark execution failed: %w\nStderr: %s", err, stderr.String())
+	// Get stdout pipe for real-time reading
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
 
-	// Parse results
-	results, err := r.parseOutput(stdout.String())
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start benchmark: %w", err)
+	}
+
+	// Parse results in real-time while collecting output
+	results, err := r.parseOutputRealtime(stdoutPipe)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse benchmark output: %w", err)
+	}
+
+	// Wait for command to complete
+	if err := cmd.Wait(); err != nil {
+		return nil, fmt.Errorf("benchmark execution failed: %w\nStderr: %s", err, stderr.String())
 	}
 
 	duration := time.Since(startTime)
@@ -127,24 +151,31 @@ func (r *Runner) Run() (*models.BenchmarkRun, error) {
 	return run, nil
 }
 
-// parseOutput parses the benchmark output from go test -bench
-func (r *Runner) parseOutput(output string) ([]models.BenchmarkResult, error) {
+// parseOutputRealtime parses the benchmark output in real-time from a reader
+func (r *Runner) parseOutputRealtime(reader io.Reader) ([]models.BenchmarkResult, error) {
 	var results []models.BenchmarkResult
 
 	// Regex to match benchmark lines
 	// Example: BenchmarkFoo-8   1000000   1234 ns/op   512 B/op   10 allocs/op
 	benchRegex := regexp.MustCompile(`^Benchmark(\S+)\s+(\d+)\s+([\d.]+)\s+ns/op(?:\s+([\d.]+)\s+MB/s)?(?:\s+(\d+)\s+B/op)?(?:\s+(\d+)\s+allocs/op)?`)
 
-	scanner := bufio.NewScanner(strings.NewReader(output))
+	scanner := bufio.NewScanner(reader)
 	// Increase buffer size to handle long output lines (default is 64KB, set to 1MB)
 	buf := make([]byte, 0, 64*1024)
 	scanner.Buffer(buf, 1024*1024) // 1MB max token size
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		matches := benchRegex.FindStringSubmatch(line)
 
 		if matches != nil {
 			name := matches[1]
+
+			// Call progress callback if set
+			if r.progressCallback != nil {
+				r.progressCallback(name)
+			}
+
 			iterations, _ := strconv.ParseInt(matches[2], 10, 64)
 			nsPerOp, _ := strconv.ParseFloat(matches[3], 64)
 
@@ -182,6 +213,11 @@ func (r *Runner) parseOutput(output string) ([]models.BenchmarkResult, error) {
 	}
 
 	return results, nil
+}
+
+// parseOutput parses the benchmark output from go test -bench (kept for compatibility)
+func (r *Runner) parseOutput(output string) ([]models.BenchmarkResult, error) {
+	return r.parseOutputRealtime(strings.NewReader(output))
 }
 
 // getGoVersion returns the current Go version

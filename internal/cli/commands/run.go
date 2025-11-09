@@ -68,7 +68,12 @@ func Run() error {
 	spinner := ui.NewSpinner("Executing benchmarks")
 	spinner.Start()
 
-	r := runner.NewRunner(*packagePath, *benchFilter)
+	// Create progress callback to update spinner with current test name
+	progressCallback := func(testName string) {
+		spinner.UpdateMessage(fmt.Sprintf("Running: Benchmark%s", testName))
+	}
+
+	r := runner.NewRunner(*packagePath, *benchFilter).WithProgress(progressCallback)
 	if profileOpts != nil {
 		r = r.WithProfiling(profileOpts)
 	}
