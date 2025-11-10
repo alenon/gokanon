@@ -511,6 +511,126 @@ func TestRunCommandInvalidProfileOption(t *testing.T) {
 	})
 }
 
+func TestRunCommandWithCPUFlag(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create a simple benchmark file
+	testFile := filepath.Join(tempDir, "bench_test.go")
+	benchmarkCode := `package test
+
+import "testing"
+
+func BenchmarkSimple(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_ = i * 2
+	}
+}
+`
+	if err := os.WriteFile(testFile, []byte(benchmarkCode), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	storageDir := filepath.Join(tempDir, ".gokanon")
+	withArgs([]string{"gokanon", "run", "-bench=.", "-pkg=" + tempDir, "-storage=" + storageDir, "-cpu=1,2"}, func() {
+		err := Run()
+		if err != nil {
+			t.Logf("Run command with -cpu flag result: %v", err)
+		}
+	})
+
+	// Verify that a run was saved
+	store := storage.NewStorage(storageDir)
+	runs, err := store.List()
+	if err == nil && len(runs) > 0 {
+		t.Logf("Successfully created run with CPU flag: %s", runs[0].ID)
+		// Verify the command contains the -cpu flag
+		if !strings.Contains(runs[0].Command, "-cpu") {
+			t.Error("Expected command to contain -cpu flag")
+		}
+	}
+}
+
+func TestRunCommandWithBenchtimeFlag(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create a simple benchmark file
+	testFile := filepath.Join(tempDir, "bench_test.go")
+	benchmarkCode := `package test
+
+import "testing"
+
+func BenchmarkSimple(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_ = i * 2
+	}
+}
+`
+	if err := os.WriteFile(testFile, []byte(benchmarkCode), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	storageDir := filepath.Join(tempDir, ".gokanon")
+	withArgs([]string{"gokanon", "run", "-bench=.", "-pkg=" + tempDir, "-storage=" + storageDir, "-benchtime=1s"}, func() {
+		err := Run()
+		if err != nil {
+			t.Logf("Run command with -benchtime flag result: %v", err)
+		}
+	})
+
+	// Verify that a run was saved
+	store := storage.NewStorage(storageDir)
+	runs, err := store.List()
+	if err == nil && len(runs) > 0 {
+		t.Logf("Successfully created run with benchtime flag: %s", runs[0].ID)
+		// Verify the command contains the -benchtime flag
+		if !strings.Contains(runs[0].Command, "-benchtime") {
+			t.Error("Expected command to contain -benchtime flag")
+		}
+	}
+}
+
+func TestRunCommandWithCPUAndBenchtimeFlags(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create a simple benchmark file
+	testFile := filepath.Join(tempDir, "bench_test.go")
+	benchmarkCode := `package test
+
+import "testing"
+
+func BenchmarkSimple(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_ = i * 2
+	}
+}
+`
+	if err := os.WriteFile(testFile, []byte(benchmarkCode), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	storageDir := filepath.Join(tempDir, ".gokanon")
+	withArgs([]string{"gokanon", "run", "-bench=.", "-pkg=" + tempDir, "-storage=" + storageDir, "-cpu=1,2", "-benchtime=500ms"}, func() {
+		err := Run()
+		if err != nil {
+			t.Logf("Run command with -cpu and -benchtime flags result: %v", err)
+		}
+	})
+
+	// Verify that a run was saved
+	store := storage.NewStorage(storageDir)
+	runs, err := store.List()
+	if err == nil && len(runs) > 0 {
+		t.Logf("Successfully created run with both flags: %s", runs[0].ID)
+		// Verify the command contains both flags
+		if !strings.Contains(runs[0].Command, "-cpu") {
+			t.Error("Expected command to contain -cpu flag")
+		}
+		if !strings.Contains(runs[0].Command, "-benchtime") {
+			t.Error("Expected command to contain -benchtime flag")
+		}
+	}
+}
+
 // ===== Compare Command Tests =====
 
 func TestCompareWithBaseline(t *testing.T) {

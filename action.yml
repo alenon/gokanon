@@ -81,6 +81,16 @@ inputs:
     required: false
     default: ''
 
+  cpu:
+    description: 'CPU list for parallel benchmark execution (e.g., 1,2,4)'
+    required: false
+    default: ''
+
+  benchtime:
+    description: 'Benchmark duration (e.g., 1s, 500ms, 10x)'
+    required: false
+    default: ''
+
   trend-analysis-runs:
     description: 'Number of runs to use for trend analysis (0 to skip, requires at least 2 runs)'
     required: false
@@ -213,6 +223,16 @@ runs:
         if [ -n "${{ inputs.enable-profiling }}" ]; then
           echo "Profiling enabled: ${{ inputs.enable-profiling }}"
           GOKANON_CMD="${GOKANON_CMD} -profile=\"${{ inputs.enable-profiling }}\""
+        fi
+
+        if [ -n "${{ inputs.cpu }}" ]; then
+          echo "CPU parallelism: ${{ inputs.cpu }}"
+          GOKANON_CMD="${GOKANON_CMD} -cpu=\"${{ inputs.cpu }}\""
+        fi
+
+        if [ -n "${{ inputs.benchtime }}" ]; then
+          echo "Benchmark time: ${{ inputs.benchtime }}"
+          GOKANON_CMD="${GOKANON_CMD} -benchtime=\"${{ inputs.benchtime }}\""
         fi
 
         eval $GOKANON_CMD

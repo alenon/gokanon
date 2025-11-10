@@ -157,6 +157,9 @@ gokanon run -pkg=./...
 
 # With profiling
 gokanon run --profile=cpu,mem
+
+# Control CPU parallelism and benchmark duration
+gokanon run -cpu=1,2,4 -benchtime=1s
 ```
 
 ### 🔥 Profiling & Analysis
@@ -285,6 +288,8 @@ gokanon check --latest -threshold=10
     packages: './...'
     threshold-percent: 10
     enable-profiling: 'cpu,mem'
+    cpu: '1,2,4'
+    benchtime: '1s'
     export-format: 'html'
 ```
 

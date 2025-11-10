@@ -22,6 +22,8 @@ func Run() error {
 	storageDir := runFlags.String("storage", ".gokanon", "Storage directory for results")
 	profileFlag := runFlags.String("profile", "", "Enable profiling: cpu, mem, or cpu,mem")
 	verbose := runFlags.Bool("verbose", false, "Show detailed benchmark output")
+	cpuFlag := runFlags.String("cpu", "", "CPU list (passed to -cpu)")
+	benchtimeFlag := runFlags.String("benchtime", "", "Benchmark time (passed to -benchtime)")
 	runFlags.Parse(os.Args[2:])
 
 	ui.PrintHeader("Running Benchmarks")
@@ -73,6 +75,14 @@ func Run() error {
 	}
 
 	r := runner.NewRunner(*packagePath, *benchFilter)
+
+	// Set CPU and benchtime flags if provided
+	if *cpuFlag != "" {
+		r = r.WithCPU(*cpuFlag)
+	}
+	if *benchtimeFlag != "" {
+		r = r.WithBenchtime(*benchtimeFlag)
+	}
 
 	// Set up progress callback for non-verbose mode
 	if !*verbose {
