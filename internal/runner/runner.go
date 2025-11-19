@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -80,106 +79,9 @@ func (r *Runner) WithBenchtime(benchtime string) *Runner {
 
 // Run executes the benchmarks and returns parsed results
 func (r *Runner) Run() (*models.BenchmarkRun, error) {
-	startTime := time.Now()
-
-	// Get Go version
-	goVersion, err := r.getGoVersion()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Go version: %w", err)
-	}
-
-	// Generate unique ID for this run
-	runID := generateID()
-
-	// Create temporary directory for profile files
-	tempDir, err := os.MkdirTemp("", "gokanon-profile-*")
-	if err != nil {
-		return nil, fmt.Errorf("failed to create temp directory: %w", err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	// Build the benchmark command
-	args := []string{"test", "-bench", r.benchFilter, "-benchmem"}
-
-	// Add CPU flag if specified
-	if r.cpu != "" {
-		args = append(args, "-cpu", r.cpu)
-	}
-
-	// Add benchtime flag if specified
-	if r.benchtime != "" {
-		args = append(args, "-benchtime", r.benchtime)
-	}
-
-	// Add profiling flags if enabled
-	var cpuProfilePath, memProfilePath string
-	if r.profileOptions != nil {
-		if r.profileOptions.EnableCPU {
-			cpuProfilePath = filepath.Join(tempDir, "cpu.prof")
-			args = append(args, "-cpuprofile", cpuProfilePath)
-		}
-		if r.profileOptions.EnableMemory {
-			memProfilePath = filepath.Join(tempDir, "mem.prof")
-			args = append(args, "-memprofile", memProfilePath)
-		}
-	}
-
-	if r.packagePath != "" {
-		args = append(args, r.packagePath)
-	} else {
-		args = append(args, "./...")
-	}
-
-	// Execute benchmark
-	cmd := exec.Command("go", args...)
-
-	// Capture stderr to a buffer
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	// Get stdout pipe for real-time reading
-	stdoutPipe, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
-	}
-
-	// Start the command
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start benchmark: %w", err)
-	}
-
-	// Parse results in real-time while collecting output
-	results, err := r.parseOutputRealtime(stdoutPipe)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse benchmark output: %w", err)
-	}
-
-	// Wait for command to complete
-	if err := cmd.Wait(); err != nil {
-		return nil, fmt.Errorf("benchmark execution failed: %w\nStderr: %s", err, stderr.String())
-	}
-
-	duration := time.Since(startTime)
-
-	run := &models.BenchmarkRun{
-		ID:        runID,
-		Timestamp: startTime,
-		Package:   r.packagePath,
-		GoVersion: goVersion,
-		Results:   results,
-		Command:   fmt.Sprintf("go %s", strings.Join(args, " ")),
-		Duration:  duration,
-	}
-
-	// Handle profile files if profiling was enabled
-	if r.profileOptions != nil && r.profileOptions.Storage != nil {
-		if err := r.handleProfiles(run, cpuProfilePath, memProfilePath); err != nil {
-			// Log warning but don't fail the run
-			fmt.Fprintf(os.Stderr, "Warning: failed to process profiles: %v\n", err)
-		}
-	}
-
-	return run, nil
+	// Use direct execution instead of spawning go test command
+	directRunner := NewDirectRunner(r)
+	return directRunner.Run()
 }
 
 // parseOutputRealtime parses the benchmark output in real-time from a reader

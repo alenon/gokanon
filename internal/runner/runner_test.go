@@ -302,9 +302,9 @@ func TestRunWithActualBenchmarks(t *testing.T) {
 		t.Error("Expected non-empty command")
 	}
 
-	// Verify command format
-	if !strings.Contains(run.Command, "go test") {
-		t.Errorf("Expected command to contain 'go test', got: %s", run.Command)
+	// Verify command format - now uses direct execution
+	if !strings.Contains(run.Command, "benchmark") && !strings.Contains(run.Command, "direct execution") {
+		t.Errorf("Expected command to contain 'benchmark' or 'direct execution', got: %s", run.Command)
 	}
 }
 
