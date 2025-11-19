@@ -31,6 +31,8 @@ jobs:
           go-version: '1.21'
           packages: './...'
           benchmark-filter: '.'  # Run all benchmarks
+          cpu: '1,2,4'  # Test with different CPU counts
+          benchtime: '3s'  # Longer benchtime for more accurate results
           threshold-percent: 15
           export-format: 'html,csv,markdown'
           export-output: 'nightly-performance'

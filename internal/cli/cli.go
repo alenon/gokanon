@@ -37,6 +37,7 @@ Examples:
   gokanon run -bench=. -pkg=./...        # Run all benchmarks in all packages
   gokanon run -bench=BenchmarkFoo        # Run specific benchmark
   gokanon run -profile=cpu,mem           # Run with CPU and memory profiling
+  gokanon run -cpu=1,2,4 -benchtime=1s   # Run with specific CPU counts and duration
   gokanon list                           # List all saved results
   gokanon compare run-123 run-456        # Compare two specific runs
   gokanon compare --latest               # Compare last two runs
