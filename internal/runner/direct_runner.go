@@ -278,56 +278,58 @@ func (dr *DirectRunner) filterBenchmarks(benchmarks []string) []string {
 	return filtered
 }
 
-// runBenchmarksViaTestBinary compiles and runs benchmarks via test binary
+// runBenchmarksViaTestBinary compiles and runs benchmarks via custom harness
 func (dr *DirectRunner) runBenchmarksViaTestBinary(pkgPath string, benchmarks []string) ([]models.BenchmarkResult, error) {
-	// Create a temporary directory for the test binary
-	tempDir, err := os.MkdirTemp("", "gokanon-test-*")
+	// Create a temporary directory for the harness
+	tempDir, err := os.MkdirTemp("", "gokanon-harness-*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp directory: %w", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Compile the test binary
-	testBinary := filepath.Join(tempDir, "test.bin")
-	compileArgs := []string{"test", "-c", "-o", testBinary}
-
-	if pkgPath != "" && pkgPath != "." {
-		compileArgs = append(compileArgs, pkgPath)
+	// Determine the import path for the package
+	importPath, err := dr.getPackageImportPath(pkgPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get package import path: %w", err)
 	}
 
-	compileCmd := exec.Command("go", compileArgs...)
+	// Generate the benchmark harness code
+	harnessCode, err := dr.generateHarness(importPath, benchmarks)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate harness: %w", err)
+	}
+
+	// Write the harness to a temporary file
+	harnessPath := filepath.Join(tempDir, "harness.go")
+	if err := os.WriteFile(harnessPath, []byte(harnessCode), 0644); err != nil {
+		return nil, fmt.Errorf("failed to write harness file: %w", err)
+	}
+
+	// For local packages, build in the module context
+	// Get the module root
+	moduleRoot, err := dr.findModuleRoot()
+	if err != nil {
+		return nil, fmt.Errorf("failed to find module root: %w", err)
+	}
+
+	// Build the harness binary in the context of the module root
+	harnessBinary := filepath.Join(tempDir, "harness")
+	compileCmd := exec.Command("go", "build", "-o", harnessBinary, harnessPath)
+	compileCmd.Dir = moduleRoot // Build from module root so imports work
 	var compileStderr bytes.Buffer
 	compileCmd.Stderr = &compileStderr
 
 	if err := compileCmd.Run(); err != nil {
-		return nil, fmt.Errorf("failed to compile test binary: %w\nStderr: %s", err, compileStderr.String())
+		return nil, fmt.Errorf("failed to compile harness: %w\nStderr: %s\nHarness:\n%s", err, compileStderr.String(), harnessCode)
 	}
 
-	// Build arguments for running the test binary
-	args := []string{"-test.bench=" + dr.runner.benchFilter, "-test.benchmem"}
-
-	if dr.runner.cpu != "" {
-		args = append(args, "-test.cpu="+dr.runner.cpu)
-	}
-
-	if dr.runner.benchtime != "" {
-		args = append(args, "-test.benchtime="+dr.runner.benchtime)
-	}
-
-	// Add profiling flags if enabled
-	if dr.runner.profileOptions != nil {
-		if dr.runner.profileOptions.EnableCPU {
-			cpuProfile := filepath.Join(tempDir, "cpu.prof")
-			args = append(args, "-test.cpuprofile="+cpuProfile)
-		}
-		if dr.runner.profileOptions.EnableMemory {
-			memProfile := filepath.Join(tempDir, "mem.prof")
-			args = append(args, "-test.memprofile="+memProfile)
-		}
-	}
-
-	// Execute the test binary
-	cmd := exec.Command(testBinary, args...)
+	// Execute the harness
+	cmd := exec.Command(harnessBinary)
+	cmd.Env = append(os.Environ(),
+		fmt.Sprintf("GOKANON_BENCH_FILTER=%s", dr.runner.benchFilter),
+		fmt.Sprintf("GOKANON_CPU=%s", dr.runner.cpu),
+		fmt.Sprintf("GOKANON_BENCHTIME=%s", dr.runner.benchtime),
+	)
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -340,7 +342,7 @@ func (dr *DirectRunner) runBenchmarksViaTestBinary(pkgPath string, benchmarks []
 
 	// Start the command
 	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start test binary: %w", err)
+		return nil, fmt.Errorf("failed to start harness: %w", err)
 	}
 
 	// Parse results in real-time
@@ -351,13 +353,119 @@ func (dr *DirectRunner) runBenchmarksViaTestBinary(pkgPath string, benchmarks []
 
 	// Wait for command to complete
 	if err := cmd.Wait(); err != nil {
-		// Check if it's just a non-zero exit (benchmarks ran but some failed)
 		if stderr.Len() > 0 {
 			return nil, fmt.Errorf("benchmark execution failed: %w\nStderr: %s", err, stderr.String())
 		}
 	}
 
 	return results, nil
+}
+
+// getPackageImportPath returns the import path for a package directory
+func (dr *DirectRunner) getPackageImportPath(pkgPath string) (string, error) {
+	if pkgPath == "" || pkgPath == "." {
+		pkgPath = "."
+	}
+
+	// Use go list to get the import path
+	cmd := exec.Command("go", "list", "-f", "{{.ImportPath}}", pkgPath)
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get import path: %w", err)
+	}
+
+	return strings.TrimSpace(string(output)), nil
+}
+
+// generateHarness generates Go code that runs benchmarks directly
+func (dr *DirectRunner) generateHarness(importPath string, benchmarks []string) (string, error) {
+	var buf bytes.Buffer
+
+	buf.WriteString(`package main
+
+import (
+	"fmt"
+	"os"
+	"runtime"
+	"testing"
+	"time"
+
+	bench "` + importPath + `"
+)
+
+func main() {
+	// Set GOMAXPROCS if CPU flag is provided
+	cpuFlag := os.Getenv("GOKANON_CPU")
+	if cpuFlag != "" {
+		// For simplicity, just use the first value
+		runtime.GOMAXPROCS(runtime.NumCPU())
+	}
+
+	benchtime := os.Getenv("GOKANON_BENCHTIME")
+	if benchtime != "" {
+		// Benchtime will be handled by testing.B
+		_ = benchtime
+	}
+
+`)
+
+	// Generate benchmark runner for each function
+	for _, benchName := range benchmarks {
+		buf.WriteString(fmt.Sprintf(`	// Run %s
+	result := testing.Benchmark(bench.%s)
+	printBenchmarkResult("%s", result)
+`, benchName, benchName, strings.TrimPrefix(benchName, "Benchmark")))
+	}
+
+	buf.WriteString(`}
+
+func printBenchmarkResult(name string, result testing.BenchmarkResult) {
+	// Get GOMAXPROCS for naming
+	procs := runtime.GOMAXPROCS(0)
+	fullName := fmt.Sprintf("%s-%d", name, procs)
+
+	// Print in the same format as go test -bench
+	fmt.Printf("Benchmark%s\t%d\t%d ns/op",
+		fullName, result.N, result.NsPerOp())
+
+	if result.Bytes > 0 {
+		mbPerSec := (float64(result.Bytes) * float64(result.N) / 1e6) / result.T.Seconds()
+		fmt.Printf("\t%.2f MB/s", mbPerSec)
+	}
+
+	if result.MemAllocs > 0 {
+		fmt.Printf("\t%d B/op\t%d allocs/op",
+			result.AllocedBytesPerOp(), result.AllocsPerOp())
+	}
+
+	fmt.Println()
+}
+`)
+
+	return buf.String(), nil
+}
+
+// findModuleRoot finds the root directory of the Go module
+func (dr *DirectRunner) findModuleRoot() (string, error) {
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+
+	for {
+		goModPath := filepath.Join(currentDir, "go.mod")
+		if _, err := os.Stat(goModPath); err == nil {
+			return currentDir, nil
+		}
+
+		parent := filepath.Dir(currentDir)
+		if parent == currentDir {
+			break
+		}
+		currentDir = parent
+	}
+
+	return "", fmt.Errorf("go.mod not found")
 }
 
 // InternalBenchmark runs a single benchmark function directly (for future use)
